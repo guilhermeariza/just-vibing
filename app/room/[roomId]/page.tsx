@@ -244,39 +244,72 @@ export default function RoomPage({ params }: { params: Promise<{ roomId: string 
   const team1RoundsWon = gameState.roundsWon.team1;
   const team2RoundsWon = gameState.roundsWon.team2;
 
+  // Verifica se o jogador pode responder ao truco (é do time adversário)
+  const canRespondTruco = gameState.waitingForResponse &&
+    gameState.trucoCalledBy !== undefined &&
+    gameState.trucoCalledBy !== myTeam;
+
+  // Nome do estado do truco para exibição
+  const trucoStateNames: Record<string, string> = {
+    'none': 'Valendo 1 ponto',
+    'truco': 'TRUCO (3 pontos)',
+    'seis': 'SEIS (6 pontos)',
+    'nove': 'NOVE (9 pontos)',
+    'doze': 'DOZE (12 pontos)',
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-green-800 to-green-900 p-4">
       <div className="max-w-4xl mx-auto">
-        {/* Placar */}
+        {/* Placar Principal */}
         <div className="bg-white rounded-lg shadow-lg p-4 mb-4">
-          <div className="grid grid-cols-3 gap-4 text-center">
-            <div className={`${myTeam === 1 ? 'bg-blue-100' : 'bg-gray-50'} p-3 rounded-lg`}>
-              <div className="text-sm text-gray-600">Time 1</div>
-              <div className="text-3xl font-bold text-blue-600">{team1Score}</div>
-              <div className="text-xs text-gray-500">Rounds: {team1RoundsWon}</div>
-            </div>
-
-            <div className="flex flex-col items-center justify-center">
-              <div className="text-sm text-gray-600 mb-1">Mão {gameState.currentRound}</div>
-              <div className="text-lg font-bold text-gray-800">
-                {gameState.trucoState === 'none' ? '1 ponto' : gameState.trucoState.toUpperCase()}
+          <div className="text-center mb-3">
+            <h2 className="text-sm font-semibold text-gray-600 uppercase">Jogo até 12 pontos</h2>
+          </div>
+          <div className="grid grid-cols-2 gap-6">
+            <div className={`${myTeam === 1 ? 'bg-blue-100 border-2 border-blue-400' : 'bg-gray-50'} p-4 rounded-lg text-center`}>
+              <div className="text-sm font-semibold text-gray-700 mb-1">
+                {myTeam === 1 ? '👥 Time 1 (VOCÊ)' : 'Time 1'}
               </div>
-              {gameState.vira && (
-                <div className="mt-2">
-                  <div className="text-xs text-gray-500 mb-1">Vira</div>
-                  <Card card={gameState.vira} size="sm" />
-                  {manilhaRank && (
-                    <div className="text-xs text-gray-600 mt-1">Manilha: {manilhaRank}</div>
-                  )}
-                </div>
-              )}
+              <div className="text-5xl font-bold text-blue-600 mb-1">{team1Score}</div>
+              <div className="text-xs text-gray-500">
+                Mãos ganhas na rodada: {team1RoundsWon}/2
+              </div>
             </div>
 
-            <div className={`${myTeam === 2 ? 'bg-red-100' : 'bg-gray-50'} p-3 rounded-lg`}>
-              <div className="text-sm text-gray-600">Time 2</div>
-              <div className="text-3xl font-bold text-red-600">{team2Score}</div>
-              <div className="text-xs text-gray-500">Rounds: {team2RoundsWon}</div>
+            <div className={`${myTeam === 2 ? 'bg-red-100 border-2 border-red-400' : 'bg-gray-50'} p-4 rounded-lg text-center`}>
+              <div className="text-sm font-semibold text-gray-700 mb-1">
+                {myTeam === 2 ? '👥 Time 2 (VOCÊ)' : 'Time 2'}
+              </div>
+              <div className="text-5xl font-bold text-red-600 mb-1">{team2Score}</div>
+              <div className="text-xs text-gray-500">
+                Mãos ganhas na rodada: {team2RoundsWon}/2
+              </div>
             </div>
+          </div>
+        </div>
+
+        {/* Estado da Aposta e Vira */}
+        <div className="bg-gradient-to-r from-orange-500 to-red-500 rounded-lg shadow-lg p-4 mb-4 text-white">
+          <div className="grid grid-cols-2 gap-4">
+            <div className="text-center">
+              <div className="text-sm opacity-90 mb-1">Rodada Atual</div>
+              <div className="text-3xl font-bold">
+                {trucoStateNames[gameState.trucoState]}
+              </div>
+              <div className="text-xs opacity-75 mt-1">Mão {gameState.currentRound}/3</div>
+            </div>
+            {gameState.vira && (
+              <div className="flex flex-col items-center justify-center">
+                <div className="text-xs opacity-90 mb-1">Vira</div>
+                <Card card={gameState.vira} size="sm" />
+                {manilhaRank && (
+                  <div className="text-xs font-bold mt-1 bg-white text-orange-600 px-2 py-1 rounded">
+                    Manilha: {manilhaRank}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
 
@@ -330,31 +363,51 @@ export default function RoomPage({ params }: { params: Promise<{ roomId: string 
 
             {/* Botões de ação */}
             <div className="mt-6 space-y-2">
-              <button
-                onClick={callTruco}
-                disabled={gameState.waitingForResponse || gameState.trucoState === 'doze'}
-                className="w-full bg-orange-600 hover:bg-orange-700 disabled:bg-gray-400 text-white py-3 rounded-lg font-bold text-lg transition-colors"
-              >
-                TRUCO! 🔥
-              </button>
+              {!gameState.waitingForResponse && (
+                <button
+                  onClick={callTruco}
+                  disabled={gameState.trucoState === 'doze'}
+                  className="w-full bg-orange-600 hover:bg-orange-700 disabled:bg-gray-400 text-white py-3 rounded-lg font-bold text-lg transition-colors"
+                >
+                  {gameState.trucoState === 'none' && 'TRUCO! 🔥'}
+                  {gameState.trucoState === 'truco' && 'SEIS! 🔥🔥'}
+                  {gameState.trucoState === 'seis' && 'NOVE! 🔥🔥🔥'}
+                  {gameState.trucoState === 'nove' && 'DOZE! 🔥🔥🔥🔥'}
+                  {gameState.trucoState === 'doze' && 'Aposta Máxima'}
+                </button>
+              )}
 
-              {gameState.waitingForResponse && (
-                <div className="bg-yellow-50 border-2 border-yellow-400 rounded-lg p-4">
-                  <p className="text-center font-semibold mb-3">Adversário pediu truco!</p>
-                  <div className="grid grid-cols-2 gap-2">
+              {/* Mostra apenas para o time adversário */}
+              {canRespondTruco && (
+                <div className="bg-yellow-50 border-4 border-yellow-400 rounded-lg p-4 animate-pulse">
+                  <p className="text-center font-bold text-lg mb-3 text-gray-800">
+                    ⚡ Time adversário pediu {gameState.trucoState === 'none' ? 'TRUCO' :
+                      gameState.trucoState === 'truco' ? 'SEIS' :
+                      gameState.trucoState === 'seis' ? 'NOVE' : 'DOZE'}! ⚡
+                  </p>
+                  <div className="grid grid-cols-2 gap-3">
                     <button
                       onClick={() => respondTruco(true)}
-                      className="bg-green-600 hover:bg-green-700 text-white py-2 rounded-lg font-semibold"
+                      className="bg-green-600 hover:bg-green-700 text-white py-3 rounded-lg font-bold text-lg"
                     >
-                      Aceitar
+                      ✓ Aceitar
                     </button>
                     <button
                       onClick={() => respondTruco(false)}
-                      className="bg-red-600 hover:bg-red-700 text-white py-2 rounded-lg font-semibold"
+                      className="bg-red-600 hover:bg-red-700 text-white py-3 rounded-lg font-bold text-lg"
                     >
-                      Recusar
+                      ✗ Recusar
                     </button>
                   </div>
+                </div>
+              )}
+
+              {/* Aviso para quem está esperando a resposta */}
+              {gameState.waitingForResponse && !canRespondTruco && (
+                <div className="bg-blue-50 border-2 border-blue-400 rounded-lg p-4">
+                  <p className="text-center font-semibold text-blue-800">
+                    ⏳ Aguardando time adversário responder ao pedido de truco...
+                  </p>
                 </div>
               )}
 

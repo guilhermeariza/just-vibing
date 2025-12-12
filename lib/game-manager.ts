@@ -188,6 +188,7 @@ class GameManager {
     game.trucoState = 'none';
     game.roundScore = 1;
     game.waitingForResponse = false;
+    game.trucoCalledBy = undefined;
     game.vira = vira;
     game.dealer = (game.dealer + 1) % game.players.length;
     game.currentPlayerIndex = (game.dealer + 1) % game.players.length;
@@ -217,6 +218,7 @@ class GameManager {
     if (!nextState) return null;
 
     game.waitingForResponse = true;
+    game.trucoCalledBy = player.team; // Rastreia qual time pediu
     return game;
   }
 
@@ -229,7 +231,15 @@ class GameManager {
     if (!room || !room.gameState) return null;
 
     const game = room.gameState;
-    if (!game.waitingForResponse) return null;
+    if (!game.waitingForResponse || !game.trucoCalledBy) return null;
+
+    const player = game.players.find((p) => p.id === playerId);
+    if (!player) return null;
+
+    // Apenas jogadores do time ADVERSÁRIO podem responder
+    if (player.team === game.trucoCalledBy) {
+      return null; // Jogador do mesmo time que pediu não pode responder
+    }
 
     game.waitingForResponse = false;
 
@@ -239,12 +249,26 @@ class GameManager {
         game.trucoState = nextState;
         game.roundScore = getTrucoValue(nextState);
       }
+      game.trucoCalledBy = undefined; // Reset após aceitar
     } else {
-      // Recusou - time adversário ganha a mão
-      const player = game.players.find((p) => p.id === playerId);
-      if (player) {
-        const winningTeam = player.team === 1 ? 2 : 1;
-        this.endHand(roomId, winningTeam);
+      // Recusou - time que PEDIU o truco ganha a mão com os pontos atuais
+      const winningTeam = game.trucoCalledBy;
+      const currentPoints = getTrucoValue(game.trucoState);
+
+      // Ganha com os pontos do estado atual (antes do aumento)
+      if (winningTeam === 1) {
+        game.score.team1 += currentPoints;
+      } else {
+        game.score.team2 += currentPoints;
+      }
+
+      game.trucoCalledBy = undefined;
+
+      // Verifica vitória ou inicia nova mão
+      if (game.score.team1 >= 12 || game.score.team2 >= 12) {
+        this.endGame(roomId);
+      } else {
+        this.startNewHand(roomId);
       }
     }
 

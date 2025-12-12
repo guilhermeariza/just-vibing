@@ -25,6 +25,7 @@ export interface GameState {
   roundScore: number; // 1, 3, 6, 9, 12
   trucoState: 'none' | 'truco' | 'seis' | 'nove' | 'doze';
   waitingForResponse: boolean;
+  trucoCalledBy?: 1 | 2; // Qual time pediu o truco
   currentPlayerIndex: number;
   roundsWon: { team1: number; team2: number };
   gameStarted: boolean;
