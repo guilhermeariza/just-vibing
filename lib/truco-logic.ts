@@ -205,3 +205,17 @@ export function getCardSymbol(suit: Suit): string {
 export function getCardDisplay(rank: Rank): string {
   return rank;
 }
+
+export function checkMaoDe11(score: { team1: number; team2: number }): {
+  team1: boolean;
+  team2: boolean;
+} {
+  return {
+    team1: score.team1 === 11,
+    team2: score.team2 === 11,
+  };
+}
+
+export function checkMaoDeFerro(score: { team1: number; team2: number }): boolean {
+  return score.team1 === 11 && score.team2 === 11;
+}

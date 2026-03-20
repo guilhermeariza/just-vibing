@@ -10,6 +10,8 @@ import {
   createDeck,
   dealCards,
   getVira,
+  checkMaoDe11,
+  checkMaoDeFerro,
 } from './truco-logic';
 
 class GameManager {
@@ -122,17 +124,34 @@ class GameManager {
 
     const game = room.gameState;
     const manilhaRank = getManilha(game.vira!);
-    const winningTeam = determineRoundWinner(
-      game.playedCards,
-      game.players,
-      manilhaRank
-    );
+
+    // Encontra o índice da carta vencedora
+    let highestCardIndex = 0;
+    let highestCard = game.playedCards[0].card;
+
+    for (let i = 1; i < game.playedCards.length; i++) {
+      const comparison = compareCards(game.playedCards[i].card, highestCard, manilhaRank);
+      if (comparison > 0) {
+        highestCard = game.playedCards[i].card;
+        highestCardIndex = i;
+      }
+    }
+
+    // Encontra o jogador vencedor
+    const winnerPlayerId = game.playedCards[highestCardIndex].playerId;
+    const winnerPlayerIndex = game.players.findIndex((p) => p.id === winnerPlayerId);
+    const winnerPlayer = game.players[winnerPlayerIndex];
+
+    const winningTeam = winnerPlayer.team;
 
     if (winningTeam === 1) {
       game.roundsWon.team1++;
     } else if (winningTeam === 2) {
       game.roundsWon.team2++;
     }
+
+    // Salva quem ganhou para jogar primeiro na próxima rodada
+    game.lastRoundWinner = winnerPlayerIndex;
 
     game.playedCards = [];
     game.currentRound++;
@@ -145,6 +164,9 @@ class GameManager {
     } else if (game.currentRound > 3) {
       // Empate - ninguém ganha
       this.startNewHand(roomId);
+    } else {
+      // Próxima rodada: quem ganhou joga primeiro
+      game.currentPlayerIndex = game.lastRoundWinner;
     }
   }
 
@@ -182,16 +204,29 @@ class GameManager {
       player.hand = hands[index];
     });
 
+    // Verifica mão de 11 e mão de ferro
+    const maoDe11 = checkMaoDe11(game.score);
+    const maoDeFerro = checkMaoDeFerro(game.score);
+
     game.currentRound = 1;
     game.playedCards = [];
     game.roundsWon = { team1: 0, team2: 0 };
     game.trucoState = 'none';
-    game.roundScore = 1;
     game.waitingForResponse = false;
     game.trucoCalledBy = undefined;
     game.vira = vira;
     game.dealer = (game.dealer + 1) % game.players.length;
     game.currentPlayerIndex = (game.dealer + 1) % game.players.length;
+    game.isMaoDe11 = maoDe11;
+    game.isMaoDeFerro = maoDeFerro;
+
+    // Mão de ferro vale automaticamente 3 pontos
+    if (maoDeFerro) {
+      game.roundScore = 3;
+      game.trucoState = 'truco';
+    } else {
+      game.roundScore = 1;
+    }
   }
 
   private endGame(roomId: string): void {
@@ -213,6 +248,13 @@ class GameManager {
     const game = room.gameState;
     const player = game.players.find((p) => p.id === playerId);
     if (!player || game.waitingForResponse) return null;
+
+    // Não pode pedir truco em mão de ferro
+    if (game.isMaoDeFerro) return null;
+
+    // Time com 11 pontos não pode pedir truco (apenas responder)
+    if (game.isMaoDe11?.team1 && player.team === 1) return null;
+    if (game.isMaoDe11?.team2 && player.team === 2) return null;
 
     const nextState = getNextTrucoState(game.trucoState);
     if (!nextState) return null;

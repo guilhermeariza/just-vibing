@@ -289,6 +289,26 @@ export default function RoomPage({ params }: { params: Promise<{ roomId: string 
           </div>
         </div>
 
+        {/* Aviso de Mão de 11 ou Mão de Ferro */}
+        {(gameState.isMaoDe11?.team1 || gameState.isMaoDe11?.team2 || gameState.isMaoDeFerro) && (
+          <div className={`${
+            gameState.isMaoDeFerro
+              ? 'bg-gradient-to-r from-purple-600 to-purple-800'
+              : 'bg-gradient-to-r from-yellow-500 to-yellow-600'
+          } rounded-lg shadow-lg p-4 mb-4 text-white animate-pulse`}>
+            <div className="text-center">
+              <div className="text-2xl font-bold mb-1">
+                {gameState.isMaoDeFerro ? '⚔️ MÃO DE FERRO ⚔️' : '⚡ MÃO DE 11 ⚡'}
+              </div>
+              <div className="text-sm">
+                {gameState.isMaoDeFerro
+                  ? 'Ambos os times têm 11 pontos! Esta mão vale automaticamente 3 pontos.'
+                  : `${gameState.isMaoDe11?.team1 ? 'Time 1' : 'Time 2'} está com 11 pontos! Não pode pedir truco.`}
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Estado da Aposta e Vira */}
         <div className="bg-gradient-to-r from-orange-500 to-red-500 rounded-lg shadow-lg p-4 mb-4 text-white">
           <div className="grid grid-cols-2 gap-4">

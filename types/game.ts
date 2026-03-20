@@ -28,9 +28,12 @@ export interface GameState {
   trucoCalledBy?: 1 | 2; // Qual time pediu o truco
   currentPlayerIndex: number;
   roundsWon: { team1: number; team2: number };
+  lastRoundWinner?: number; // Índice do jogador que ganhou a última rodada
   gameStarted: boolean;
   dealer: number;
   vira?: Card; // Manilha
+  isMaoDe11?: { team1: boolean; team2: boolean }; // Indica se algum time está na mão de 11
+  isMaoDeFerro?: boolean; // Indica se é mão de ferro (11x11)
 }
 
 export interface Room {
