@@ -3,6 +3,9 @@
 import { useState } from 'react';
 import { useRooms } from '@/hooks/useGameState';
 import { useRouter } from 'next/navigation';
+import toast from 'react-hot-toast';
+import { InputModal } from '@/components/InputModal';
+import { RoomCardSkeleton, LoadingSpinner, Spinner } from '@/components/Loading';
 
 export default function Home() {
   const { rooms, loading } = useRooms();
@@ -10,12 +13,19 @@ export default function Home() {
   const [roomName, setRoomName] = useState('');
   const [playerName, setPlayerName] = useState('');
   const [creating, setCreating] = useState(false);
+  const [showJoinModal, setShowJoinModal] = useState(false);
+  const [selectedRoomId, setSelectedRoomId] = useState<string | null>(null);
   const router = useRouter();
 
   const createRoom = async () => {
-    if (!roomName.trim() || !playerName.trim()) return;
+    if (!roomName.trim() || !playerName.trim()) {
+      toast.error('Preencha todos os campos');
+      return;
+    }
 
     setCreating(true);
+    const toastId = toast.loading('Criando sala...');
+
     try {
       const response = await fetch('/api/rooms', {
         method: 'POST',
@@ -42,23 +52,33 @@ export default function Home() {
       localStorage.setItem('playerId', player.id);
       localStorage.setItem('playerName', player.name);
 
+      toast.success('Sala criada com sucesso!', { id: toastId });
       router.push(`/room/${room.id}`);
     } catch (error) {
-      alert(error instanceof Error ? error.message : 'Erro ao criar sala');
+      toast.error(
+        error instanceof Error ? error.message : 'Erro ao criar sala',
+        { id: toastId }
+      );
     } finally {
       setCreating(false);
     }
   };
 
-  const joinRoom = async (roomId: string) => {
-    const name = prompt('Digite seu nome:');
-    if (!name) return;
+  const handleJoinRoomClick = (roomId: string) => {
+    setSelectedRoomId(roomId);
+    setShowJoinModal(true);
+  };
+
+  const joinRoom = async (playerName: string) => {
+    if (!selectedRoomId) return;
+
+    const toastId = toast.loading('Entrando na sala...');
 
     try {
-      const response = await fetch(`/api/rooms/${roomId}/join`, {
+      const response = await fetch(`/api/rooms/${selectedRoomId}/join`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ playerName: name }),
+        body: JSON.stringify({ playerName }),
       });
 
       if (!response.ok) throw new Error('Erro ao entrar na sala');
@@ -68,9 +88,14 @@ export default function Home() {
       localStorage.setItem('playerId', player.id);
       localStorage.setItem('playerName', player.name);
 
-      router.push(`/room/${roomId}`);
+      toast.success('Entrou na sala!', { id: toastId });
+      router.push(`/room/${selectedRoomId}`);
     } catch (error) {
-      alert(error instanceof Error ? error.message : 'Erro ao entrar na sala');
+      toast.error(
+        error instanceof Error ? error.message : 'Erro ao entrar na sala',
+        { id: toastId }
+      );
+      throw error;
     }
   };
 
@@ -113,18 +138,24 @@ export default function Home() {
               <button
                 onClick={createRoom}
                 disabled={creating || !roomName.trim() || !playerName.trim()}
-                className="w-full bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white px-6 py-3 rounded-lg font-semibold transition-colors"
+                className="w-full bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white px-6 py-3 rounded-lg font-semibold transition-colors flex items-center justify-center gap-2"
               >
+                {creating && <Spinner size="sm" />}
                 {creating ? 'Criando...' : 'Criar e Entrar'}
               </button>
             </div>
           )}
 
           {loading && rooms.length === 0 ? (
-            <div className="text-center py-8 text-gray-500">Carregando salas...</div>
+            <div className="space-y-3">
+              <RoomCardSkeleton />
+              <RoomCardSkeleton />
+              <RoomCardSkeleton />
+            </div>
           ) : rooms.length === 0 ? (
-            <div className="text-center py-8 text-gray-500">
-              Nenhuma sala disponível. Crie uma nova sala para começar!
+            <div className="text-center py-12">
+              <p className="text-gray-500 text-lg mb-2">Nenhuma sala disponível</p>
+              <p className="text-gray-400 text-sm">Crie uma nova sala para começar!</p>
             </div>
           ) : (
             <div className="space-y-3">
@@ -143,7 +174,7 @@ export default function Home() {
                     </p>
                   </div>
                   <button
-                    onClick={() => joinRoom(room.id)}
+                    onClick={() => handleJoinRoomClick(room.id)}
                     disabled={room.players.length >= room.maxPlayers || room.gameState?.gameStarted}
                     className="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white px-6 py-2 rounded-lg font-semibold transition-colors"
                   >
@@ -153,6 +184,16 @@ export default function Home() {
               ))}
             </div>
           )}
+
+          <InputModal
+            isOpen={showJoinModal}
+            onClose={() => setShowJoinModal(false)}
+            onSubmit={joinRoom}
+            title="Entrar na Sala"
+            placeholder="Digite seu nome"
+            submitLabel="Entrar"
+            description="Escolha um nome para se identificar no jogo"
+          />
         </div>
 
         <footer className="text-center text-green-200 text-sm">

@@ -5,6 +5,8 @@ import { useGameState } from '@/hooks/useGameState';
 import { Card } from '@/components/Card';
 import { getManilha } from '@/lib/truco-logic';
 import { useRouter } from 'next/navigation';
+import toast from 'react-hot-toast';
+import { LoadingSpinner, PlayerCardSkeleton, Spinner } from '@/components/Loading';
 
 export default function RoomPage({ params }: { params: Promise<{ roomId: string }> }) {
   const { roomId } = use(params);
@@ -42,13 +44,23 @@ export default function RoomPage({ params }: { params: Promise<{ roomId: string 
   };
 
   const startGame = async () => {
+    const toastId = toast.loading('Iniciando jogo...');
     try {
-      await fetch(`/api/rooms/${roomId}/start`, {
+      const response = await fetch(`/api/rooms/${roomId}/start`, {
         method: 'POST',
       });
+
+      if (!response.ok) {
+        throw new Error('Verifique se todos estão prontos');
+      }
+
+      toast.success('Jogo iniciado!', { id: toastId });
       refetch();
     } catch (error) {
-      alert('Erro ao iniciar jogo. Verifique se todos estão prontos.');
+      toast.error(
+        error instanceof Error ? error.message : 'Erro ao iniciar jogo',
+        { id: toastId }
+      );
     }
   };
 
@@ -57,7 +69,7 @@ export default function RoomPage({ params }: { params: Promise<{ roomId: string 
 
     const currentPlayerInGame = gameState.players[gameState.currentPlayerIndex];
     if (currentPlayerInGame.id !== playerId) {
-      alert('Não é sua vez!');
+      toast.error('Não é sua vez!');
       return;
     }
 
@@ -69,6 +81,7 @@ export default function RoomPage({ params }: { params: Promise<{ roomId: string 
       });
       refetch();
     } catch (error) {
+      toast.error('Erro ao jogar carta');
       console.error('Erro ao jogar carta:', error);
     }
   };
@@ -77,14 +90,22 @@ export default function RoomPage({ params }: { params: Promise<{ roomId: string 
     if (!playerId) return;
 
     try {
-      await fetch(`/api/game/${roomId}/truco`, {
+      const response = await fetch(`/api/game/${roomId}/truco`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ playerId }),
       });
+
+      if (!response.ok) {
+        throw new Error('Não foi possível pedir truco');
+      }
+
+      toast.success('Truco pedido! 🔥');
       refetch();
     } catch (error) {
-      alert('Não foi possível pedir truco');
+      toast.error(
+        error instanceof Error ? error.message : 'Não foi possível pedir truco'
+      );
     }
   };
 
@@ -121,7 +142,7 @@ export default function RoomPage({ params }: { params: Promise<{ roomId: string 
   if (!room) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-green-800 to-green-900 flex items-center justify-center">
-        <div className="text-white text-2xl">Carregando...</div>
+        <LoadingSpinner message="Carregando sala..." />
       </div>
     );
   }

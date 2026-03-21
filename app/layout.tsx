@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import { ToastProvider } from "@/components/ToastProvider";
+import { ConnectionStatus } from "@/components/ConnectionStatus";
 
 export const metadata: Metadata = {
   title: "🃏 Truco Online - Jogo Multijogador",
@@ -14,7 +16,9 @@ export default function RootLayout({
   return (
     <html lang="pt-BR">
       <body className="antialiased">
+        <ConnectionStatus />
         {children}
+        <ToastProvider />
       </body>
     </html>
   );
