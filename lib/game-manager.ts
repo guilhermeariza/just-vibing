@@ -44,6 +44,11 @@ class GameManager {
       return false;
     }
 
+    // Impede que jogador entre duas vezes
+    if (room.players.some((p) => p.id === player.id)) {
+      return false;
+    }
+
     // Atribui time automaticamente
     const team1Count = room.players.filter((p) => p.team === 1).length;
     const team2Count = room.players.filter((p) => p.team === 2).length;
@@ -97,6 +102,11 @@ class GameManager {
     const currentPlayer = game.players[game.currentPlayerIndex];
 
     if (!player || player.id !== currentPlayer.id || game.waitingForResponse) {
+      return null;
+    }
+
+    // Validação robusta: verifica índice E se carta existe
+    if (cardIndex < 0 || cardIndex >= player.hand.length) {
       return null;
     }
 
@@ -255,6 +265,17 @@ class GameManager {
     // Time com 11 pontos não pode pedir truco (apenas responder)
     if (game.isMaoDe11?.team1 && player.team === 1) return null;
     if (game.isMaoDe11?.team2 && player.team === 2) return null;
+
+    // Apenas pode pedir truco quem tem a vez OU quem já jogou nesta rodada
+    const playerIndex = game.players.findIndex((p) => p.id === playerId);
+    const isCurrentPlayer = playerIndex === game.currentPlayerIndex;
+    const hasPlayedThisRound = game.playedCards.some(
+      (pc) => pc.playerId === playerId
+    );
+
+    if (!isCurrentPlayer && !hasPlayedThisRound) {
+      return null; // Jogador não pode pedir truco agora
+    }
 
     const nextState = getNextTrucoState(game.trucoState);
     if (!nextState) return null;

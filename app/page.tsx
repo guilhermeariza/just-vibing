@@ -48,9 +48,11 @@ export default function Home() {
 
       const { player } = await joinResponse.json();
 
-      // Salvar ID do jogador no localStorage
-      localStorage.setItem('playerId', player.id);
-      localStorage.setItem('playerName', player.name);
+      // Salvar ID do jogador no localStorage (SSR-safe)
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('playerId', player.id);
+        localStorage.setItem('playerName', player.name);
+      }
 
       toast.success('Sala criada com sucesso!', { id: toastId });
       router.push(`/room/${room.id}`);
@@ -85,8 +87,11 @@ export default function Home() {
 
       const { player } = await response.json();
 
-      localStorage.setItem('playerId', player.id);
-      localStorage.setItem('playerName', player.name);
+      // Salvar ID do jogador no localStorage (SSR-safe)
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('playerId', player.id);
+        localStorage.setItem('playerName', player.name);
+      }
 
       toast.success('Entrou na sala!', { id: toastId });
       router.push(`/room/${selectedRoomId}`);

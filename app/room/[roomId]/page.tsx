@@ -16,6 +16,9 @@ export default function RoomPage({ params }: { params: Promise<{ roomId: string 
   const router = useRouter();
 
   useEffect(() => {
+    // SSR-safe check
+    if (typeof window === 'undefined') return;
+
     const id = localStorage.getItem('playerId');
     if (!id) {
       router.push('/');
@@ -283,27 +286,35 @@ export default function RoomPage({ params }: { params: Promise<{ roomId: string 
     <div className="min-h-screen bg-gradient-to-br from-green-800 to-green-900 p-4">
       <div className="max-w-4xl mx-auto">
         {/* Placar Principal */}
-        <div className="bg-white rounded-lg shadow-lg p-4 mb-4">
+        <div className="bg-white rounded-lg shadow-lg p-4 mb-4" role="region" aria-label="Placar do jogo">
           <div className="text-center mb-3">
             <h2 className="text-sm font-semibold text-gray-600 uppercase">Jogo até 12 pontos</h2>
           </div>
           <div className="grid grid-cols-2 gap-6">
-            <div className={`${myTeam === 1 ? 'bg-blue-100 border-2 border-blue-400' : 'bg-gray-50'} p-4 rounded-lg text-center`}>
+            <div
+              className={`${myTeam === 1 ? 'bg-blue-100 border-2 border-blue-400' : 'bg-gray-50'} p-4 rounded-lg text-center`}
+              role="status"
+              aria-label={`Time 1: ${team1Score} pontos, ${team1RoundsWon} mãos ganhas`}
+            >
               <div className="text-sm font-semibold text-gray-700 mb-1">
                 {myTeam === 1 ? '👥 Time 1 (VOCÊ)' : 'Time 1'}
               </div>
-              <div className="text-5xl font-bold text-blue-600 mb-1">{team1Score}</div>
-              <div className="text-xs text-gray-500">
+              <div className="text-5xl font-bold text-blue-600 mb-1" aria-hidden="true">{team1Score}</div>
+              <div className="text-xs text-gray-500" aria-hidden="true">
                 Mãos ganhas na rodada: {team1RoundsWon}/2
               </div>
             </div>
 
-            <div className={`${myTeam === 2 ? 'bg-red-100 border-2 border-red-400' : 'bg-gray-50'} p-4 rounded-lg text-center`}>
+            <div
+              className={`${myTeam === 2 ? 'bg-red-100 border-2 border-red-400' : 'bg-gray-50'} p-4 rounded-lg text-center`}
+              role="status"
+              aria-label={`Time 2: ${team2Score} pontos, ${team2RoundsWon} mãos ganhas`}
+            >
               <div className="text-sm font-semibold text-gray-700 mb-1">
                 {myTeam === 2 ? '👥 Time 2 (VOCÊ)' : 'Time 2'}
               </div>
-              <div className="text-5xl font-bold text-red-600 mb-1">{team2Score}</div>
-              <div className="text-xs text-gray-500">
+              <div className="text-5xl font-bold text-red-600 mb-1" aria-hidden="true">{team2Score}</div>
+              <div className="text-xs text-gray-500" aria-hidden="true">
                 Mãos ganhas na rodada: {team2RoundsWon}/2
               </div>
             </div>

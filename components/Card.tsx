@@ -18,9 +18,20 @@ export function Card({ card, onClick, disabled, size = 'md', faceDown }: CardPro
     lg: 'w-24 h-36 text-2xl',
   };
 
+  // Gera descrição acessível da carta
+  const suitNames = {
+    ouros: 'de Ouros',
+    copas: 'de Copas',
+    espadas: 'de Espadas',
+    paus: 'de Paus',
+  };
+  const ariaLabel = `${getCardDisplay(card.rank)} ${suitNames[card.suit]}`;
+
   if (faceDown) {
     return (
       <div
+        role="img"
+        aria-label="Carta virada para baixo"
         className={`${sizeClasses[size]} rounded-lg border-2 border-gray-400 bg-gradient-to-br from-blue-900 to-blue-700 shadow-lg flex items-center justify-center`}
       >
         <div className="text-4xl text-blue-300">🂠</div>
@@ -32,6 +43,8 @@ export function Card({ card, onClick, disabled, size = 'md', faceDown }: CardPro
     <button
       onClick={onClick}
       disabled={disabled}
+      aria-label={ariaLabel}
+      aria-disabled={disabled}
       className={`
         ${sizeClasses[size]}
         rounded-lg border-2 border-gray-300 bg-white shadow-lg

@@ -30,10 +30,40 @@ export function useGameState(roomId: string | null) {
 
     fetchRoom();
 
-    // Poll para atualizações
-    const interval = setInterval(fetchRoom, 1000);
+    // Smart polling: reduz frequência quando tab está inativa
+    let pollInterval = 1000; // Intervalo padrão
+    let interval: NodeJS.Timeout;
 
-    return () => clearInterval(interval);
+    const startPolling = () => {
+      interval = setInterval(fetchRoom, pollInterval);
+    };
+
+    const handleVisibilityChange = () => {
+      clearInterval(interval);
+      if (document.hidden) {
+        // Tab inativa: polling mais lento (5s)
+        pollInterval = 5000;
+      } else {
+        // Tab ativa: polling normal (1s)
+        pollInterval = 1000;
+      }
+      startPolling();
+    };
+
+    // Inicia polling
+    startPolling();
+
+    // Adiciona listener para mudanças de visibilidade
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', handleVisibilityChange);
+    }
+
+    return () => {
+      clearInterval(interval);
+      if (typeof document !== 'undefined') {
+        document.removeEventListener('visibilitychange', handleVisibilityChange);
+      }
+    };
   }, [roomId, fetchRoom]);
 
   return { room, gameState, loading, error, refetch: fetchRoom };
@@ -61,8 +91,39 @@ export function useRooms() {
 
   useEffect(() => {
     fetchRooms();
-    const interval = setInterval(fetchRooms, 2000);
-    return () => clearInterval(interval);
+
+    // Smart polling para lista de salas
+    let pollInterval = 2000;
+    let interval: NodeJS.Timeout;
+
+    const startPolling = () => {
+      interval = setInterval(fetchRooms, pollInterval);
+    };
+
+    const handleVisibilityChange = () => {
+      clearInterval(interval);
+      if (document.hidden) {
+        // Tab inativa: polling mais lento (10s)
+        pollInterval = 10000;
+      } else {
+        // Tab ativa: polling normal (2s)
+        pollInterval = 2000;
+      }
+      startPolling();
+    };
+
+    startPolling();
+
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', handleVisibilityChange);
+    }
+
+    return () => {
+      clearInterval(interval);
+      if (typeof document !== 'undefined') {
+        document.removeEventListener('visibilitychange', handleVisibilityChange);
+      }
+    };
   }, [fetchRooms]);
 
   return { rooms, loading, error, refetch: fetchRooms };
