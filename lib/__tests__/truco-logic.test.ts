@@ -367,4 +367,114 @@ describe('Truco Logic', () => {
       expect(result).toBe(false);
     });
   });
+
+  describe('getManilha - All Ranks Coverage', () => {
+    it('should handle 4 → 5', () => {
+      const vira: Card = { rank: '4', suit: 'ouros', value: 1 };
+      expect(getManilha(vira)).toBe('5');
+    });
+
+    it('should handle 5 → 6', () => {
+      const vira: Card = { rank: '5', suit: 'ouros', value: 2 };
+      expect(getManilha(vira)).toBe('6');
+    });
+
+    it('should handle 6 → 7', () => {
+      const vira: Card = { rank: '6', suit: 'ouros', value: 3 };
+      expect(getManilha(vira)).toBe('7');
+    });
+
+    it('should handle 7 → Q (Queen)', () => {
+      const vira: Card = { rank: '7', suit: 'ouros', value: 4 };
+      expect(getManilha(vira)).toBe('Q');
+    });
+
+    it('should handle Q → J (Jack)', () => {
+      const vira: Card = { rank: 'Q', suit: 'ouros', value: 5 };
+      expect(getManilha(vira)).toBe('J');
+    });
+
+    it('should handle J → K (King)', () => {
+      const vira: Card = { rank: 'J', suit: 'ouros', value: 6 };
+      expect(getManilha(vira)).toBe('K');
+    });
+
+    it('should handle K → A (Ace)', () => {
+      const vira: Card = { rank: 'K', suit: 'ouros', value: 7 };
+      expect(getManilha(vira)).toBe('A');
+    });
+
+    it('should handle A → 2', () => {
+      const vira: Card = { rank: 'A', suit: 'ouros', value: 8 };
+      expect(getManilha(vira)).toBe('2');
+    });
+
+    it('should handle 2 → 3', () => {
+      const vira: Card = { rank: '2', suit: 'ouros', value: 9 };
+      expect(getManilha(vira)).toBe('3');
+    });
+
+    it('should handle 3 → 4 (wraparound)', () => {
+      const vira: Card = { rank: '3', suit: 'ouros', value: 10 };
+      expect(getManilha(vira)).toBe('4');
+    });
+  });
+
+  describe('compareCards - All Manilha Combinations', () => {
+    const manilhaRank = '5'; // Vira é 4, então manilha é 5
+
+    // Manilhas: Zap (ouros)=14, Escopeta (espadas)=13, Espadilha (copas)=12, Paus (paus)=11
+    const zap: Card = { rank: '5', suit: 'ouros', value: 2 };
+    const escopeta: Card = { rank: '5', suit: 'espadas', value: 2 };
+    const espadilha: Card = { rank: '5', suit: 'copas', value: 2 };
+    const paus: Card = { rank: '5', suit: 'paus', value: 2 };
+
+    it('should compare Zap > Escopeta', () => {
+      expect(compareCards(zap, escopeta, manilhaRank)).toBeGreaterThan(0);
+      expect(compareCards(escopeta, zap, manilhaRank)).toBeLessThan(0);
+    });
+
+    it('should compare Zap > Espadilha', () => {
+      expect(compareCards(zap, espadilha, manilhaRank)).toBeGreaterThan(0);
+      expect(compareCards(espadilha, zap, manilhaRank)).toBeLessThan(0);
+    });
+
+    it('should compare Zap > Paus', () => {
+      expect(compareCards(zap, paus, manilhaRank)).toBeGreaterThan(0);
+      expect(compareCards(paus, zap, manilhaRank)).toBeLessThan(0);
+    });
+
+    it('should compare Escopeta > Espadilha', () => {
+      expect(compareCards(escopeta, espadilha, manilhaRank)).toBeGreaterThan(0);
+      expect(compareCards(espadilha, escopeta, manilhaRank)).toBeLessThan(0);
+    });
+
+    it('should compare Escopeta > Paus', () => {
+      expect(compareCards(escopeta, paus, manilhaRank)).toBeGreaterThan(0);
+      expect(compareCards(paus, escopeta, manilhaRank)).toBeLessThan(0);
+    });
+
+    it('should compare Espadilha > Paus', () => {
+      expect(compareCards(espadilha, paus, manilhaRank)).toBeGreaterThan(0);
+      expect(compareCards(paus, espadilha, manilhaRank)).toBeLessThan(0);
+    });
+  });
+
+  describe('Truco State Transitions - Complete Sequence', () => {
+    it('should progress: none → truco → seis → nove → doze → null', () => {
+      expect(getNextTrucoState('none')).toBe('truco');
+      expect(getNextTrucoState('truco')).toBe('seis');
+      expect(getNextTrucoState('seis')).toBe('nove');
+      expect(getNextTrucoState('nove')).toBe('doze');
+      expect(getNextTrucoState('doze')).toBeNull();
+    });
+
+    it('should return correct values for each state', () => {
+      expect(getTrucoValue('none')).toBe(1);
+      expect(getTrucoValue('truco')).toBe(3);
+      expect(getTrucoValue('seis')).toBe(6);
+      expect(getTrucoValue('nove')).toBe(9);
+      expect(getTrucoValue('doze')).toBe(12);
+    });
+  });
 });
