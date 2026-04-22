@@ -2,10 +2,13 @@
 
 import { use, useState, useEffect } from 'react';
 import { useGameState } from '@/hooks/useGameState';
+import { useGameEvents } from '@/hooks/useGameEvents';
 import { ModernCard } from '@/components/modern/ModernCard';
 import { PlayerAvatar } from '@/components/modern/PlayerAvatar';
 import { TrucoButton } from '@/components/modern/TrucoButton';
 import { AnimatedScore } from '@/components/modern/AnimatedScore';
+import { GameEventModal } from '@/components/game/GameEventModal';
+import { CenterPile } from '@/components/game/CenterPile';
 import { getManilha } from '@/lib/truco-logic';
 import { useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
@@ -277,40 +280,73 @@ export default function RoomPage({ params }: { params: Promise<{ roomId: string 
     'doze': 'DOZE (12 pontos)',
   };
 
+  // Sistema de eventos para feedback visual
+  const { currentEvent, dismissCurrentEvent } = useGameEvents(gameState.gameEvents || []);
+
+  // Handle game end event - redirect to lobby
+  const handleDismissEvent = () => {
+    if (currentEvent?.type === 'game_won') {
+      dismissCurrentEvent();
+      // Pequeno delay para transição suave
+      setTimeout(() => {
+        window.location.reload();
+      }, 500);
+    } else {
+      dismissCurrentEvent();
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-green-800 to-green-900 p-4">
+      {/* Game Event Modal */}
+      <GameEventModal
+        event={currentEvent}
+        onDismiss={handleDismissEvent}
+        myTeam={myTeam}
+      />
+
       <div className="max-w-4xl mx-auto">
         {/* Placar Principal */}
-        <div className="bg-white rounded-lg shadow-lg p-4 mb-4" role="region" aria-label="Placar do jogo">
-          <div className="text-center mb-3">
-            <h2 className="text-sm font-semibold text-gray-600 uppercase">Jogo até 12 pontos</h2>
+        <div className="bg-gradient-to-br from-white to-gray-50 rounded-2xl shadow-2xl p-6 mb-4 border-t-4 border-truco-gold-500" role="region" aria-label="Placar do jogo">
+          <div className="text-center mb-4">
+            <h2 className="text-base font-display font-bold text-gray-700 uppercase tracking-wide">Jogo até 12 pontos</h2>
           </div>
           <div className="grid grid-cols-2 gap-6">
             <div
-              className={`${myTeam === 1 ? 'bg-blue-100 border-2 border-blue-400' : 'bg-gray-50'} p-4 rounded-lg text-center`}
+              className={`${
+                myTeam === 1
+                  ? 'bg-gradient-to-br from-blue-500 to-blue-600 text-white shadow-xl scale-105'
+                  : 'bg-gray-50 text-gray-700'
+              } p-5 rounded-xl text-center transition-all duration-300 hover:scale-105`}
               role="status"
               aria-label={`Time 1: ${team1Score} pontos, ${team1RoundsWon} mãos ganhas`}
             >
-              <div className="text-sm font-semibold text-gray-700 mb-1">
-                {myTeam === 1 ? '👥 Time 1 (VOCÊ)' : 'Time 1'}
+              <div className={`text-sm font-bold mb-2 ${myTeam === 1 ? 'text-white' : 'text-gray-600'}`}>
+                {myTeam === 1 ? '👥 SEU TIME' : 'Time 1'}
               </div>
               <AnimatedScore score={team1Score} teamColor="blue" />
-              <div className="text-xs text-gray-500 mt-1" aria-hidden="true">
-                Mãos ganhas na rodada: {team1RoundsWon}/2
+              <div className={`text-xs mt-2 flex items-center justify-center gap-1 ${myTeam === 1 ? 'text-blue-100' : 'text-gray-500'}`} aria-hidden="true">
+                <span>🏆</span>
+                <span>Mãos: {team1RoundsWon}/2</span>
               </div>
             </div>
 
             <div
-              className={`${myTeam === 2 ? 'bg-red-100 border-2 border-red-400' : 'bg-gray-50'} p-4 rounded-lg text-center`}
+              className={`${
+                myTeam === 2
+                  ? 'bg-gradient-to-br from-red-500 to-red-600 text-white shadow-xl scale-105'
+                  : 'bg-gray-50 text-gray-700'
+              } p-5 rounded-xl text-center transition-all duration-300 hover:scale-105`}
               role="status"
               aria-label={`Time 2: ${team2Score} pontos, ${team2RoundsWon} mãos ganhas`}
             >
-              <div className="text-sm font-semibold text-gray-700 mb-1">
-                {myTeam === 2 ? '👥 Time 2 (VOCÊ)' : 'Time 2'}
+              <div className={`text-sm font-bold mb-2 ${myTeam === 2 ? 'text-white' : 'text-gray-600'}`}>
+                {myTeam === 2 ? '👥 SEU TIME' : 'Time 2'}
               </div>
               <AnimatedScore score={team2Score} teamColor="red" />
-              <div className="text-xs text-gray-500 mt-1" aria-hidden="true">
-                Mãos ganhas na rodada: {team2RoundsWon}/2
+              <div className={`text-xs mt-2 flex items-center justify-center gap-1 ${myTeam === 2 ? 'text-red-100' : 'text-gray-500'}`} aria-hidden="true">
+                <span>🏆</span>
+                <span>Mãos: {team2RoundsWon}/2</span>
               </div>
             </div>
           </div>
@@ -361,26 +397,19 @@ export default function RoomPage({ params }: { params: Promise<{ roomId: string 
         </div>
 
         {/* Cartas jogadas na mesa */}
-        <div className="bg-green-700 rounded-lg shadow-lg p-6 mb-4 min-h-[200px] flex items-center justify-center">
-          {gameState.playedCards.length === 0 ? (
-            <p className="text-green-200">Aguardando jogadas...</p>
-          ) : (
-            <div className="flex gap-4 flex-wrap justify-center">
-              {gameState.playedCards.map((played, idx) => {
-                const player = gameState.players.find((p) => p.id === played.playerId);
-                return (
-                  <div key={idx} className="flex flex-col items-center">
-                    <ModernCard
-                      card={played.card}
-                      size="lg"
-                      isManilha={manilhaRank ? played.card.rank === manilhaRank : false}
-                    />
-                    <div className="text-white text-sm mt-2">{player?.name}</div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
+        <div className="bg-gradient-to-br from-green-700 via-green-600 to-green-700 rounded-2xl shadow-2xl p-4 mb-4 border-4 border-green-800/50 relative overflow-hidden">
+          {/* Mesa de truco pattern background */}
+          <div className="absolute inset-0 opacity-10">
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-green-500/20 via-transparent to-transparent" />
+          </div>
+          <div className="relative z-10">
+            <CenterPile
+              playedCards={gameState.playedCards}
+              players={gameState.players}
+              manilhaRank={manilhaRank}
+              lastWinningCard={gameState.lastWinningCard}
+            />
+          </div>
         </div>
 
         {/* Indicador de turno */}

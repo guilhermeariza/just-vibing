@@ -189,6 +189,8 @@ export function initializeGame(players: Player[], roomId: string): GameState {
     gameStarted: true,
     dealer: 0,
     vira,
+    gameEvents: [],
+    isProcessingEvent: false,
   };
 }
 

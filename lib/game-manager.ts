@@ -154,11 +154,24 @@ class GameManager {
 
     const winningTeam = winnerPlayer.team;
 
+    // Salva informações da rodada vencedora para exibição
+    game.lastWinningCard = highestCard;
+    game.lastWinningPlayerId = winnerPlayerId;
+
     if (winningTeam === 1) {
       game.roundsWon.team1++;
     } else if (winningTeam === 2) {
       game.roundsWon.team2++;
     }
+
+    // Cria evento de rodada vencida
+    game.gameEvents.push({
+      type: 'round_won',
+      team: winningTeam,
+      winningCard: highestCard,
+      winningPlayerName: winnerPlayer.name,
+      timestamp: Date.now(),
+    });
 
     // Salva quem ganhou para jogar primeiro na próxima rodada
     game.lastRoundWinner = winnerPlayerIndex;
@@ -193,9 +206,17 @@ class GameManager {
       game.score.team2 += points;
     }
 
+    // Cria evento de mão vencida
+    game.gameEvents.push({
+      type: 'hand_won',
+      team: winningTeam,
+      points,
+      timestamp: Date.now(),
+    });
+
     // Verifica vitória (12 pontos)
     if (game.score.team1 >= 12 || game.score.team2 >= 12) {
-      this.endGame(roomId);
+      this.endGame(roomId, winningTeam);
     } else {
       this.startNewHand(roomId);
     }
@@ -239,16 +260,22 @@ class GameManager {
     }
   }
 
-  private endGame(roomId: string): void {
+  private endGame(roomId: string, winningTeam: 1 | 2): void {
     const room = this.rooms.get(roomId);
-    if (!room) return;
+    if (!room || !room.gameState) return;
 
-    // Reset para permitir novo jogo
-    room.gameState = undefined;
-    room.players.forEach((p) => {
-      p.isReady = false;
-      p.hand = [];
+    const game = room.gameState;
+
+    // Cria evento de jogo vencido
+    game.gameEvents.push({
+      type: 'game_won',
+      team: winningTeam,
+      points: game.score[`team${winningTeam}` as 'team1' | 'team2'],
+      timestamp: Date.now(),
     });
+
+    // Aguarda um tempo para exibir a celebração antes de resetar
+    // O reset será feito pelo frontend após o usuário dismissar a celebração
   }
 
   callTruco(roomId: string, playerId: string): GameState | null {
@@ -325,11 +352,19 @@ class GameManager {
         game.score.team2 += currentPoints;
       }
 
+      // Cria evento de truco recusado
+      game.gameEvents.push({
+        type: 'truco_refused',
+        team: winningTeam,
+        points: currentPoints,
+        timestamp: Date.now(),
+      });
+
       game.trucoCalledBy = undefined;
 
       // Verifica vitória ou inicia nova mão
       if (game.score.team1 >= 12 || game.score.team2 >= 12) {
-        this.endGame(roomId);
+        this.endGame(roomId, winningTeam);
       } else {
         this.startNewHand(roomId);
       }

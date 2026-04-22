@@ -15,6 +15,17 @@ export interface Player {
   isReady: boolean;
 }
 
+export type GameEventType = 'round_won' | 'hand_won' | 'game_won' | 'truco_refused';
+
+export interface GameEvent {
+  type: GameEventType;
+  team: 1 | 2;
+  winningCard?: Card;
+  winningPlayerName?: string;
+  points?: number;
+  timestamp: number;
+}
+
 export interface GameState {
   id: string;
   players: Player[];
@@ -34,6 +45,11 @@ export interface GameState {
   vira?: Card; // Manilha
   isMaoDe11?: { team1: boolean; team2: boolean }; // Indica se algum time está na mão de 11
   isMaoDeFerro?: boolean; // Indica se é mão de ferro (11x11)
+  // Sistema de eventos para feedback visual
+  gameEvents: GameEvent[];
+  lastWinningCard?: Card;
+  lastWinningPlayerId?: string;
+  isProcessingEvent?: boolean;
 }
 
 export interface Room {
