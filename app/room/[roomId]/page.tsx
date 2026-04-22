@@ -2,7 +2,10 @@
 
 import { use, useState, useEffect } from 'react';
 import { useGameState } from '@/hooks/useGameState';
-import { Card } from '@/components/Card';
+import { ModernCard } from '@/components/modern/ModernCard';
+import { PlayerAvatar } from '@/components/modern/PlayerAvatar';
+import { TrucoButton } from '@/components/modern/TrucoButton';
+import { AnimatedScore } from '@/components/modern/AnimatedScore';
 import { getManilha } from '@/lib/truco-logic';
 import { useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
@@ -176,19 +179,15 @@ export default function RoomPage({ params }: { params: Promise<{ roomId: string 
                 {team1.length === 0 ? (
                   <p className="text-gray-500 text-center text-sm">Aguardando jogadores...</p>
                 ) : (
-                  <div className="space-y-2">
+                  <div className="space-y-3">
                     {team1.map((player) => (
-                      <div
+                      <PlayerAvatar
                         key={player.id}
-                        className={`p-2 rounded ${
-                          player.isReady ? 'bg-green-100 border-green-300' : 'bg-white border-gray-300'
-                        } border`}
-                      >
-                        <div className="flex items-center justify-between">
-                          <span className="font-semibold">{player.name}</span>
-                          {player.isReady && <span className="text-green-600 text-sm">✓ Pronto</span>}
-                        </div>
-                      </div>
+                        name={player.name}
+                        team={1}
+                        isReady={player.isReady}
+                        isSelf={player.id === playerId}
+                      />
                     ))}
                   </div>
                 )}
@@ -199,19 +198,15 @@ export default function RoomPage({ params }: { params: Promise<{ roomId: string 
                 {team2.length === 0 ? (
                   <p className="text-gray-500 text-center text-sm">Aguardando jogadores...</p>
                 ) : (
-                  <div className="space-y-2">
+                  <div className="space-y-3">
                     {team2.map((player) => (
-                      <div
+                      <PlayerAvatar
                         key={player.id}
-                        className={`p-2 rounded ${
-                          player.isReady ? 'bg-green-100 border-green-300' : 'bg-white border-gray-300'
-                        } border`}
-                      >
-                        <div className="flex items-center justify-between">
-                          <span className="font-semibold">{player.name}</span>
-                          {player.isReady && <span className="text-green-600 text-sm">✓ Pronto</span>}
-                        </div>
-                      </div>
+                        name={player.name}
+                        team={2}
+                        isReady={player.isReady}
+                        isSelf={player.id === playerId}
+                      />
                     ))}
                   </div>
                 )}
@@ -299,8 +294,8 @@ export default function RoomPage({ params }: { params: Promise<{ roomId: string 
               <div className="text-sm font-semibold text-gray-700 mb-1">
                 {myTeam === 1 ? '👥 Time 1 (VOCÊ)' : 'Time 1'}
               </div>
-              <div className="text-5xl font-bold text-blue-600 mb-1" aria-hidden="true">{team1Score}</div>
-              <div className="text-xs text-gray-500" aria-hidden="true">
+              <AnimatedScore score={team1Score} teamColor="blue" />
+              <div className="text-xs text-gray-500 mt-1" aria-hidden="true">
                 Mãos ganhas na rodada: {team1RoundsWon}/2
               </div>
             </div>
@@ -313,8 +308,8 @@ export default function RoomPage({ params }: { params: Promise<{ roomId: string 
               <div className="text-sm font-semibold text-gray-700 mb-1">
                 {myTeam === 2 ? '👥 Time 2 (VOCÊ)' : 'Time 2'}
               </div>
-              <div className="text-5xl font-bold text-red-600 mb-1" aria-hidden="true">{team2Score}</div>
-              <div className="text-xs text-gray-500" aria-hidden="true">
+              <AnimatedScore score={team2Score} teamColor="red" />
+              <div className="text-xs text-gray-500 mt-1" aria-hidden="true">
                 Mãos ganhas na rodada: {team2RoundsWon}/2
               </div>
             </div>
@@ -354,7 +349,7 @@ export default function RoomPage({ params }: { params: Promise<{ roomId: string 
             {gameState.vira && (
               <div className="flex flex-col items-center justify-center">
                 <div className="text-xs opacity-90 mb-1">Vira</div>
-                <Card card={gameState.vira} size="sm" />
+                <ModernCard card={gameState.vira} size="md" faceDown={false} />
                 {manilhaRank && (
                   <div className="text-xs font-bold mt-1 bg-white text-orange-600 px-2 py-1 rounded">
                     Manilha: {manilhaRank}
@@ -375,7 +370,11 @@ export default function RoomPage({ params }: { params: Promise<{ roomId: string 
                 const player = gameState.players.find((p) => p.id === played.playerId);
                 return (
                   <div key={idx} className="flex flex-col items-center">
-                    <Card card={played.card} size="md" />
+                    <ModernCard
+                      card={played.card}
+                      size="lg"
+                      isManilha={manilhaRank ? played.card.rank === manilhaRank : false}
+                    />
                     <div className="text-white text-sm mt-2">{player?.name}</div>
                   </div>
                 );
@@ -403,12 +402,13 @@ export default function RoomPage({ params }: { params: Promise<{ roomId: string 
             <h3 className="text-center font-semibold text-gray-800 mb-4">Suas Cartas</h3>
             <div className="flex gap-4 justify-center flex-wrap">
               {currentPlayer.hand.map((card, idx) => (
-                <Card
+                <ModernCard
                   key={idx}
                   card={card}
                   onClick={() => playCard(idx)}
                   disabled={!isMyTurn}
-                  size="lg"
+                  size="xl"
+                  isManilha={manilhaRank ? card.rank === manilhaRank : false}
                 />
               ))}
             </div>
@@ -416,17 +416,11 @@ export default function RoomPage({ params }: { params: Promise<{ roomId: string 
             {/* Botões de ação */}
             <div className="mt-6 space-y-2">
               {!gameState.waitingForResponse && (
-                <button
+                <TrucoButton
+                  variant="call"
                   onClick={callTruco}
                   disabled={gameState.trucoState === 'doze'}
-                  className="w-full bg-orange-600 hover:bg-orange-700 disabled:bg-gray-400 text-white py-3 rounded-lg font-bold text-lg transition-colors"
-                >
-                  {gameState.trucoState === 'none' && 'TRUCO! 🔥'}
-                  {gameState.trucoState === 'truco' && 'SEIS! 🔥🔥'}
-                  {gameState.trucoState === 'seis' && 'NOVE! 🔥🔥🔥'}
-                  {gameState.trucoState === 'nove' && 'DOZE! 🔥🔥🔥🔥'}
-                  {gameState.trucoState === 'doze' && 'Aposta Máxima'}
-                </button>
+                />
               )}
 
               {/* Mostra apenas para o time adversário */}
@@ -438,18 +432,14 @@ export default function RoomPage({ params }: { params: Promise<{ roomId: string 
                       gameState.trucoState === 'seis' ? 'NOVE' : 'DOZE'}! ⚡
                   </p>
                   <div className="grid grid-cols-2 gap-3">
-                    <button
+                    <TrucoButton
+                      variant="accept"
                       onClick={() => respondTruco(true)}
-                      className="bg-green-600 hover:bg-green-700 text-white py-3 rounded-lg font-bold text-lg"
-                    >
-                      ✓ Aceitar
-                    </button>
-                    <button
+                    />
+                    <TrucoButton
+                      variant="refuse"
                       onClick={() => respondTruco(false)}
-                      className="bg-red-600 hover:bg-red-700 text-white py-3 rounded-lg font-bold text-lg"
-                    >
-                      ✗ Recusar
-                    </button>
+                    />
                   </div>
                 </div>
               )}
