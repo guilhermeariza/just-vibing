@@ -1,0 +1,294 @@
+/**
+ * TRUCO ONLINE - DESIGN SYSTEM
+ * Sistema de design moderno para jogo de truco brasileiro
+ */
+
+@import "tailwindcss";
+
+/* ============================================
+   FONTES CUSTOMIZADAS
+   ============================================ */
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700;900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&display=swap');
+
+/* ============================================
+   VARIÁVEIS CSS - DESIGN TOKENS
+   ============================================ */
+:root {
+  /* === CORES PRIMÁRIAS - Verde Mesa === */
+  --truco-green-900: #1B4D25;
+  --truco-green-700: #2D5016;
+  --truco-green-500: #6BAE3C;
+  --truco-green-300: #A8D97C;
+
+  /* === CORES SECUNDÁRIAS - Ouro Brasileiro === */
+  --truco-gold-900: #8B6508;
+  --truco-gold-700: #D4A574;
+  --truco-gold-500: #F5D897;
+  --truco-gold-300: #FFF3D9;
+
+  /* === CORES DE ACENTO - Vermelho Energia === */
+  --truco-red-900: #7F1D1D;
+  --truco-red-500: #EF4444;
+  --truco-red-300: #FCA5A5;
+
+  /* === CORES NEUTRAS - Contraste Moderno === */
+  --truco-black: #0A0A0A;
+  --truco-gray-900: #1A1A1A;
+  --truco-gray-700: #404040;
+  --truco-gray-500: #808080;
+  --truco-gray-300: #D4D4D4;
+  --truco-gray-100: #F5F5F5;
+  --truco-white: #FFFFFF;
+
+  /* === GRADIENTES ESPECIAIS === */
+  --gradient-mesa: linear-gradient(135deg, #1B4D25 0%, #2D5016 50%, #1B4D25 100%);
+  --gradient-gold: linear-gradient(135deg, #D4A574 0%, #F5D897 100%);
+  --gradient-glow: radial-gradient(circle, rgba(245,216,151,0.3) 0%, transparent 70%);
+  --gradient-fire: linear-gradient(135deg, #F97316 0%, #DC2626 100%);
+
+  /* === TIPOGRAFIA === */
+  --font-heading: 'Cinzel', serif;
+  --font-body: 'Inter', sans-serif;
+  --font-display: 'Bebas Neue', cursive;
+
+  /* === ESCALA TIPOGRÁFICA (1.25 ratio) === */
+  --text-xs: 0.75rem;    /* 12px */
+  --text-sm: 0.875rem;   /* 14px */
+  --text-base: 1rem;     /* 16px */
+  --text-lg: 1.25rem;    /* 20px */
+  --text-xl: 1.5rem;     /* 24px */
+  --text-2xl: 1.875rem;  /* 30px */
+  --text-3xl: 2.25rem;   /* 36px */
+  --text-4xl: 3rem;      /* 48px */
+  --text-5xl: 3.75rem;   /* 60px */
+
+  /* === ESPAÇAMENTO - Sistema 8pt === */
+  --space-1: 0.5rem;   /* 8px */
+  --space-2: 1rem;     /* 16px */
+  --space-3: 1.5rem;   /* 24px */
+  --space-4: 2rem;     /* 32px */
+  --space-5: 2.5rem;   /* 40px */
+  --space-6: 3rem;     /* 48px */
+  --space-8: 4rem;     /* 64px */
+  --space-10: 5rem;    /* 80px */
+
+  /* === DURAÇÕES DE ANIMAÇÃO === */
+  --duration-fast: 150ms;
+  --duration-normal: 300ms;
+  --duration-slow: 500ms;
+  --duration-very-slow: 800ms;
+
+  /* === EASINGS === */
+  --ease-smooth: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-bounce: cubic-bezier(0.68, -0.55, 0.265, 1.55);
+  --ease-elastic: cubic-bezier(0.175, 0.885, 0.32, 1.275);
+
+  /* === SHADOWS === */
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+  --shadow-2xl: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+  --shadow-glow: 0 0 20px rgba(245, 216, 151, 0.5);
+}
+
+/* ============================================
+   ANIMAÇÕES GLOBAIS
+   ============================================ */
+
+@keyframes card-flip {
+  0% {
+    transform: rotateY(0deg);
+  }
+  50% {
+    transform: rotateY(90deg);
+  }
+  100% {
+    transform: rotateY(180deg);
+  }
+}
+
+@keyframes card-deal {
+  0% {
+    transform: translateY(-100vh) rotate(-45deg);
+    opacity: 0;
+  }
+  60% {
+    transform: translateY(10px) rotate(5deg);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(0) rotate(0deg);
+    opacity: 1;
+  }
+}
+
+@keyframes confetti-burst {
+  0% {
+    transform: scale(0) rotate(0deg);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(3) rotate(360deg);
+    opacity: 0;
+  }
+}
+
+@keyframes glow-pulse {
+  0%, 100% {
+    box-shadow: 0 0 20px rgba(245, 216, 151, 0.5);
+  }
+  50% {
+    box-shadow: 0 0 40px rgba(245, 216, 151, 0.8);
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -1000px 0;
+  }
+  100% {
+    background-position: 1000px 0;
+  }
+}
+
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  10%, 30%, 50%, 70%, 90% { transform: translateX(-5px); }
+  20%, 40%, 60%, 80% { transform: translateX(5px); }
+}
+
+@keyframes scale-pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+}
+
+/* ============================================
+   UTILITÁRIOS CUSTOMIZADOS
+   ============================================ */
+
+.font-heading {
+  font-family: var(--font-heading);
+}
+
+.font-body {
+  font-family: var(--font-body);
+}
+
+.font-display {
+  font-family: var(--font-display);
+}
+
+.gradient-mesa {
+  background: var(--gradient-mesa);
+}
+
+.gradient-gold {
+  background: var(--gradient-gold);
+}
+
+.gradient-fire {
+  background: var(--gradient-fire);
+}
+
+.text-gradient-gold {
+  background: var(--gradient-gold);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.animate-card-flip {
+  animation: card-flip var(--duration-slow) var(--ease-smooth);
+}
+
+.animate-card-deal {
+  animation: card-deal var(--duration-slow) var(--ease-bounce);
+}
+
+.animate-glow-pulse {
+  animation: glow-pulse 2s var(--ease-smooth) infinite;
+}
+
+.animate-shimmer {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0.2) 20%,
+    rgba(255, 255, 255, 0.5) 60%,
+    rgba(255, 255, 255, 0)
+  );
+  background-size: 1000px 100%;
+  animation: shimmer 2s infinite;
+}
+
+.animate-float {
+  animation: float 3s var(--ease-smooth) infinite;
+}
+
+.animate-shake {
+  animation: shake 0.5s var(--ease-smooth);
+}
+
+.animate-scale-pulse {
+  animation: scale-pulse 2s var(--ease-smooth) infinite;
+}
+
+/* ============================================
+   GLASSMORPHISM
+   ============================================ */
+
+.glass {
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.glass-dark {
+  background: rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* ============================================
+   EFEITOS HOVER ESPECIAIS
+   ============================================ */
+
+.hover-lift {
+  transition: transform var(--duration-normal) var(--ease-smooth),
+              box-shadow var(--duration-normal) var(--ease-smooth);
+}
+
+.hover-lift:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--shadow-xl);
+}
+
+.hover-glow:hover {
+  box-shadow: var(--shadow-glow);
+}
+
+/* ============================================
+   RESPONSIVIDADE
+   ============================================ */
+
+@media (max-width: 640px) {
+  :root {
+    --text-base: 0.875rem;  /* 14px em mobile */
+    --text-xl: 1.25rem;     /* 20px em mobile */
+    --text-4xl: 2rem;       /* 32px em mobile */
+  }
+}
