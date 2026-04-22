@@ -9,7 +9,10 @@ import { TrucoButton } from '@/components/modern/TrucoButton';
 import { AnimatedScore } from '@/components/modern/AnimatedScore';
 import { GameEventModal } from '@/components/game/GameEventModal';
 import { CenterPile } from '@/components/game/CenterPile';
+import { TrucoFireworks } from '@/components/game/TrucoFireworks';
+import { RoundHistory } from '@/components/game/RoundHistory';
 import { getManilha } from '@/lib/truco-logic';
+import { soundEffects } from '@/lib/sound-effects';
 import { useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
 import { LoadingSpinner, PlayerCardSkeleton, Spinner } from '@/components/Loading';
@@ -83,6 +86,7 @@ export default function RoomPage({ params }: { params: Promise<{ roomId: string 
     }
 
     try {
+      soundEffects.playCardPlayed();
       await fetch(`/api/game/${roomId}/play`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -109,6 +113,7 @@ export default function RoomPage({ params }: { params: Promise<{ roomId: string 
         throw new Error('Não foi possível pedir truco');
       }
 
+      soundEffects.playTrucoCalled();
       toast.success('Truco pedido! 🔥');
       refetch();
     } catch (error) {
@@ -296,6 +301,32 @@ export default function RoomPage({ params }: { params: Promise<{ roomId: string 
     }
   };
 
+  // Play sound effects when events happen
+  useEffect(() => {
+    if (!currentEvent) return;
+
+    const isMyTeamWinner = currentEvent.team === myTeam;
+
+    switch (currentEvent.type) {
+      case 'round_won':
+        soundEffects.playRoundWon();
+        break;
+      case 'hand_won':
+        soundEffects.playHandWon();
+        break;
+      case 'game_won':
+        if (isMyTeamWinner) {
+          soundEffects.playGameWon();
+        } else {
+          soundEffects.playGameLost();
+        }
+        break;
+      case 'truco_refused':
+        soundEffects.playTrucoRefused();
+        break;
+    }
+  }, [currentEvent, myTeam]);
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-green-800 to-green-900 p-4">
       {/* Game Event Modal */}
@@ -412,6 +443,11 @@ export default function RoomPage({ params }: { params: Promise<{ roomId: string 
           </div>
         </div>
 
+        {/* Histórico de Rodadas */}
+        <div className="mb-4">
+          <RoundHistory events={gameState.gameEvents || []} myTeam={myTeam} />
+        </div>
+
         {/* Indicador de turno */}
         <div className="bg-white rounded-lg shadow-lg p-4 mb-4">
           <p className="text-center font-semibold">
@@ -454,16 +490,23 @@ export default function RoomPage({ params }: { params: Promise<{ roomId: string 
 
               {/* Mostra apenas para o time adversário */}
               {canRespondTruco && (
-                <div className="bg-yellow-50 border-4 border-yellow-400 rounded-lg p-4 animate-pulse">
-                  <p className="text-center font-bold text-lg mb-3 text-gray-800">
+                <div className="relative bg-yellow-50 border-4 border-yellow-400 rounded-lg p-4 animate-pulse overflow-hidden">
+                  <TrucoFireworks
+                    isActive={true}
+                    intensity={gameState.trucoState === 'none' ? 'truco' : gameState.trucoState as any}
+                  />
+                  <p className="text-center font-bold text-lg mb-3 text-gray-800 relative z-20">
                     ⚡ Time adversário pediu {gameState.trucoState === 'none' ? 'TRUCO' :
                       gameState.trucoState === 'truco' ? 'SEIS' :
                       gameState.trucoState === 'seis' ? 'NOVE' : 'DOZE'}! ⚡
                   </p>
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-2 gap-3 relative z-20">
                     <TrucoButton
                       variant="accept"
-                      onClick={() => respondTruco(true)}
+                      onClick={() => {
+                        soundEffects.playTrucoAccepted();
+                        respondTruco(true);
+                      }}
                     />
                     <TrucoButton
                       variant="refuse"
