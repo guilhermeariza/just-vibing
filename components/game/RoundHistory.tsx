@@ -4,13 +4,13 @@ import { GameEvent } from '@/types/game';
 import { ModernCard } from '@/components/modern/ModernCard';
 
 interface RoundHistoryProps {
-  events: GameEvent[];
+  events: GameEvent[] | undefined;
   myTeam?: 1 | 2;
 }
 
 export function RoundHistory({ events, myTeam }: RoundHistoryProps) {
   // Filtrar apenas eventos de rodadas ganhas (últimas 6)
-  const roundEvents = events
+  const roundEvents = (events || [])
     .filter((e) => e.type === 'round_won')
     .slice(-6)
     .reverse();

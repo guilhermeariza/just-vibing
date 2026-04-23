@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { GameEvent } from '@/types/game';
 
-export function useGameEvents(events: GameEvent[]) {
+export function useGameEvents(events: GameEvent[] | undefined) {
   const [currentEvent, setCurrentEvent] = useState<GameEvent | null>(null);
   const [processedEvents, setProcessedEvents] = useState<Set<number>>(new Set());
 
@@ -30,8 +30,8 @@ export function useGameEvents(events: GameEvent[]) {
   return {
     currentEvent,
     dismissCurrentEvent,
-    hasUnprocessedEvents: events.some(
+    hasUnprocessedEvents: events?.some(
       (event) => !processedEvents.has(event.timestamp)
-    ),
+    ) || false,
   };
 }

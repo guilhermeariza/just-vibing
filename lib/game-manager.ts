@@ -31,7 +31,12 @@ class GameManager {
   }
 
   getRoom(id: string): Room | undefined {
-    return this.rooms.get(id);
+    const room = this.rooms.get(id);
+    // Garante compatibilidade com jogos antigos
+    if (room?.gameState && !room.gameState.gameEvents) {
+      room.gameState.gameEvents = [];
+    }
+    return room;
   }
 
   getAllRooms(): Room[] {
