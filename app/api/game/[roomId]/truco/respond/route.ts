@@ -7,29 +7,22 @@ export async function POST(
 ) {
   try {
     const { roomId } = await params;
-    const { playerId, accept } = await request.json();
+    const body = await request.json();
+    const { playerId, accept, raise } = body;
 
-    if (!playerId || typeof accept !== 'boolean') {
-      return NextResponse.json(
-        { error: 'Parâmetros inválidos' },
-        { status: 400 }
-      );
+    if (typeof playerId !== 'string' || !playerId) {
+      return NextResponse.json({ error: 'ID do jogador é obrigatório' }, { status: 400 });
+    }
+    if (typeof accept !== 'boolean') {
+      return NextResponse.json({ error: 'Parâmetros inválidos' }, { status: 400 });
     }
 
-    const gameState = gameManager.respondTruco(roomId, playerId, accept);
-
-    if (!gameState) {
-      return NextResponse.json(
-        { error: 'Não foi possível responder ao truco' },
-        { status: 400 }
-      );
+    if (!gameManager.respondTruco(roomId, playerId, accept, raise === true)) {
+      return NextResponse.json({ error: 'Não foi possível responder ao truco' }, { status: 400 });
     }
 
-    return NextResponse.json(gameState);
-  } catch (error) {
-    return NextResponse.json(
-      { error: 'Erro ao responder truco' },
-      { status: 500 }
-    );
+    return NextResponse.json({ success: true });
+  } catch {
+    return NextResponse.json({ error: 'Erro interno' }, { status: 500 });
   }
 }

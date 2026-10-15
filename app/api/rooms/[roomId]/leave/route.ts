@@ -7,29 +7,19 @@ export async function POST(
 ) {
   try {
     const { roomId } = await params;
-    const { playerId } = await request.json();
+    const body = await request.json();
+    const { playerId } = body;
 
-    if (!playerId) {
-      return NextResponse.json(
-        { error: 'ID do jogador é obrigatório' },
-        { status: 400 }
-      );
+    if (typeof playerId !== 'string' || !playerId) {
+      return NextResponse.json({ error: 'ID do jogador é obrigatório' }, { status: 400 });
     }
 
-    const success = gameManager.leaveRoom(roomId, playerId);
-
-    if (!success) {
-      return NextResponse.json(
-        { error: 'Não foi possível sair da sala' },
-        { status: 400 }
-      );
+    if (!gameManager.leaveRoom(roomId, playerId)) {
+      return NextResponse.json({ error: 'Não foi possível sair da sala' }, { status: 400 });
     }
 
     return NextResponse.json({ success: true });
-  } catch (error) {
-    return NextResponse.json(
-      { error: 'Erro ao sair da sala' },
-      { status: 500 }
-    );
+  } catch {
+    return NextResponse.json({ error: 'Erro interno' }, { status: 500 });
   }
 }

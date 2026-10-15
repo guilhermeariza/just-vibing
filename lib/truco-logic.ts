@@ -74,12 +74,12 @@ export function isManilha(card: Card, manilhaRank: Rank): boolean {
 }
 
 export function getManilhaValue(card: Card): number {
-  // Ouros (Zap) > Espadas (Escopeta) > Copas (Espadilha) > Paus (Paus)
+  // Paus (Zap) > Copas > Espadas > Ouros
   const manilhaValues: Record<Suit, number> = {
-    paus: 11,
-    copas: 12,
-    espadas: 13,
-    ouros: 14,
+    ouros: 11,
+    espadas: 12,
+    copas: 13,
+    paus: 14,
   };
   return manilhaValues[card.suit];
 }
@@ -105,31 +105,97 @@ export function compareCards(
   return card1.value - card2.value;
 }
 
+export interface RoundOutcome {
+  /** 0 = empate (cartas mais fortes iguais em times diferentes) */
+  team: 0 | 1 | 2;
+  /** Índice em playedCards da carta vencedora (-1 se empate/sem cartas) */
+  winnerIndex: number;
+}
+
+export function evaluatePlayedCards(
+  playedCards: { playerId: string; card: Card }[],
+  players: Player[],
+  manilhaRank: Rank
+): RoundOutcome {
+  if (playedCards.length === 0) return { team: 0, winnerIndex: -1 };
+
+  const teamOf = (playerId: string) =>
+    players.find((p) => p.id === playerId)?.team ?? 0;
+
+  let best = 0;
+  for (let i = 1; i < playedCards.length; i++) {
+    if (compareCards(playedCards[i].card, playedCards[best].card, manilhaRank) > 0) {
+      best = i;
+    }
+  }
+
+  // Empate só conta se a carta mais forte se repete em time ADVERSÁRIO
+  const bestTeam = teamOf(playedCards[best].playerId);
+  const tied = playedCards.some(
+    (pc, i) =>
+      i !== best &&
+      compareCards(pc.card, playedCards[best].card, manilhaRank) === 0 &&
+      teamOf(pc.playerId) !== bestTeam
+  );
+
+  if (tied) return { team: 0, winnerIndex: -1 };
+  return { team: bestTeam as 1 | 2, winnerIndex: best };
+}
+
+/** Retorna o time vencedor da rodada, 0 em caso de empate, -1 sem cartas. */
 export function determineRoundWinner(
   playedCards: { playerId: string; card: Card }[],
   players: Player[],
   manilhaRank: Rank
 ): number {
   if (playedCards.length === 0) return -1;
+  return evaluatePlayedCards(playedCards, players, manilhaRank).team;
+}
 
-  let highestCardIndex = 0;
-  let highestCard = playedCards[0].card;
+export type RoundResult = 0 | 1 | 2;
 
-  for (let i = 1; i < playedCards.length; i++) {
-    const comparison = compareCards(playedCards[i].card, highestCard, manilhaRank);
-    if (comparison > 0) {
-      highestCard = playedCards[i].card;
-      highestCardIndex = i;
-    } else if (comparison === 0) {
-      // Empate - primeira carta ganha
-      continue;
-    }
+/**
+ * Regras de empate (embuchada):
+ * - 1ª empata: quem vencer a 2ª leva a mão
+ * - 2ª empata (1ª decidida): quem venceu a 1ª leva a mão
+ * - 3ª empata: quem venceu a 1ª (ou 2ª) leva a mão
+ * - tudo empatado: mão anulada
+ * Retorna time vencedor, 0 para mão anulada, ou null se a mão continua.
+ */
+export function resolveHand(results: RoundResult[]): 1 | 2 | 0 | null {
+  const [r1, r2, r3] = results;
+  if (results.length < 2) return null;
+
+  if (results.length === 2) {
+    if (r1 !== 0 && (r2 === r1 || r2 === 0)) return r1 as 1 | 2;
+    if (r1 === 0 && r2 !== 0) return r2 as 1 | 2;
+    return null; // 1x1 ou 0x0 -> 3ª rodada
   }
 
-  // Encontra o time do jogador vencedor
-  const winnerId = playedCards[highestCardIndex].playerId;
-  const winnerPlayer = players.find((p) => p.id === winnerId);
-  return winnerPlayer ? winnerPlayer.team : -1;
+  if (r3 !== 0) return r3 as 1 | 2;
+  if (r1 !== 0) return r1 as 1 | 2;
+  if (r2 !== 0) return r2 as 1 | 2;
+  return 0;
+}
+
+/** Quem pode pedir/aumentar o truco agora. */
+export function canCallTruco(game: GameState, playerId: string): boolean {
+  if (game.winner || !game.gameStarted) return false;
+  const idx = game.players.findIndex((p) => p.id === playerId);
+  if (idx === -1) return false;
+  const player = game.players[idx];
+
+  if (game.waitingForResponse) return false;
+  if (game.isMaoDeFerro) return false;
+  if (game.isMaoDe11?.team1 && player.team === 1) return false;
+  if (game.isMaoDe11?.team2 && player.team === 2) return false;
+  if (getNextTrucoState(game.trucoState) === null) return false;
+  // Quem fez o último aumento não pode aumentar de novo
+  if (game.lastRaiseTeam === player.team) return false;
+
+  const isCurrent = idx === game.currentPlayerIndex;
+  const hasPlayed = game.playedCards.some((pc) => pc.playerId === playerId);
+  return isCurrent || hasPlayed;
 }
 
 export function canRaiseTruco(currentState: string): boolean {
@@ -190,6 +256,7 @@ export function initializeGame(players: Player[], roomId: string): GameState {
     dealer: 0,
     vira,
     gameEvents: [],
+    roundResults: [],
     isProcessingEvent: false,
   };
 }

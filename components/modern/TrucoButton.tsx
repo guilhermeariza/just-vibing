@@ -5,6 +5,8 @@ interface TrucoButtonProps {
   onClick: () => void;
   disabled?: boolean;
   state?: 'idle' | 'waiting';
+  /** Sobrescreve o texto padrão do botão */
+  label?: string;
 }
 
 export function TrucoButton({
@@ -12,6 +14,7 @@ export function TrucoButton({
   onClick,
   disabled = false,
   state = 'idle',
+  label,
 }: TrucoButtonProps) {
   const variants = {
     call: {
@@ -49,9 +52,9 @@ export function TrucoButton({
         transition-all duration-normal
         active:scale-95
       `}
-      aria-label={config.text}
+      aria-label={label ?? config.text}
     >
-      {config.text}
+      {label ?? config.text}
     </button>
   );
 }

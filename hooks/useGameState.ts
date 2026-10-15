@@ -1,32 +1,39 @@
 import { useEffect, useState, useCallback } from 'react';
-import { Room, GameState } from '@/types/game';
+import { Room, RoomSummary, GameState } from '@/types/game';
 
-export function useGameState(roomId: string | null) {
+export function useGameState(roomId: string | null, playerId: string | null) {
   const [room, setRoom] = useState<Room | null>(null);
   const [gameState, setGameState] = useState<GameState | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [notFound, setNotFound] = useState(false);
 
   const fetchRoom = useCallback(async () => {
-    if (!roomId) return;
+    if (!roomId || !playerId) return;
 
     try {
-      const response = await fetch(`/api/rooms/${roomId}`);
+      const response = await fetch(
+        `/api/rooms/${roomId}?playerId=${encodeURIComponent(playerId)}`,
+        { cache: 'no-store' }
+      );
+      if (response.status === 404) {
+        setNotFound(true);
+        return;
+      }
       if (!response.ok) throw new Error('Erro ao buscar sala');
 
       const data = await response.json();
+      setNotFound(false);
+      setError(null);
       setRoom(data);
-
-      if (data.gameState) {
-        setGameState(data.gameState);
-      }
+      setGameState(data.gameState ?? null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erro desconhecido');
     }
-  }, [roomId]);
+  }, [roomId, playerId]);
 
   useEffect(() => {
-    if (!roomId) return;
+    if (!roomId || !playerId) return;
 
     fetchRoom();
 
@@ -64,24 +71,24 @@ export function useGameState(roomId: string | null) {
         document.removeEventListener('visibilitychange', handleVisibilityChange);
       }
     };
-  }, [roomId, fetchRoom]);
+  }, [roomId, playerId, fetchRoom]);
 
-  return { room, gameState, loading, error, refetch: fetchRoom };
+  return { room, gameState, loading, error, notFound, refetch: fetchRoom };
 }
 
 export function useRooms() {
-  const [rooms, setRooms] = useState<Room[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [rooms, setRooms] = useState<RoomSummary[]>([]);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const fetchRooms = useCallback(async () => {
     try {
-      setLoading(true);
-      const response = await fetch('/api/rooms');
+      const response = await fetch('/api/rooms', { cache: 'no-store' });
       if (!response.ok) throw new Error('Erro ao buscar salas');
 
       const data = await response.json();
       setRooms(data);
+      setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erro desconhecido');
     } finally {

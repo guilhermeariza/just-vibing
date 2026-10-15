@@ -1,9 +1,11 @@
-import { Room, GameState, Player, Card } from '@/types/game';
+import { randomUUID } from 'crypto';
+import { Room, RoomSummary, GameState, GameEvent, Player } from '@/types/game';
 import {
   initializeGame,
-  determineRoundWinner,
+  evaluatePlayedCards,
+  resolveHand,
+  canCallTruco,
   getManilha,
-  compareCards,
   getTrucoValue,
   getNextTrucoState,
   shuffleDeck,
@@ -14,38 +16,132 @@ import {
   checkMaoDeFerro,
 } from './truco-logic';
 
+const ROOM_TTL_MS = 3 * 60 * 60 * 1000; // salas inativas por 3h são removidas
+const MAX_EVENTS = 40;
+const MAX_NAME_LENGTH = 24;
+const MAX_ROOM_NAME_LENGTH = 32;
+const ROOM_ID_ALPHABET = 'abcdefghjkmnpqrstuvwxyz23456789';
+
+function generateRoomId(): string {
+  const bytes = randomUUID().replace(/-/g, '');
+  let id = '';
+  for (let i = 0; i < 6; i++) {
+    id += ROOM_ID_ALPHABET[parseInt(bytes.substr(i * 2, 2), 16) % ROOM_ID_ALPHABET.length];
+  }
+  return id;
+}
+
+export function sanitizeName(value: unknown, max: number): string | null {
+  if (typeof value !== 'string') return null;
+  const clean = value.replace(/\s+/g, ' ').trim().slice(0, max);
+  return clean.length > 0 ? clean : null;
+}
+
 class GameManager {
   private rooms: Map<string, Room> = new Map();
+  private activity: Map<string, number> = new Map();
+
+  private touch(roomId: string): void {
+    this.activity.set(roomId, Date.now());
+  }
+
+  private cleanupStaleRooms(): void {
+    const now = Date.now();
+    for (const [id, last] of this.activity) {
+      if (now - last > ROOM_TTL_MS) {
+        this.rooms.delete(id);
+        this.activity.delete(id);
+      }
+    }
+  }
+
+  private pushEvent(game: GameState, event: Omit<GameEvent, 'id' | 'timestamp'>): void {
+    game.gameEvents.push({ ...event, id: randomUUID(), timestamp: Date.now() });
+    if (game.gameEvents.length > MAX_EVENTS) {
+      game.gameEvents.splice(0, game.gameEvents.length - MAX_EVENTS);
+    }
+  }
 
   createRoom(name: string): Room {
-    const id = Math.random().toString(36).substring(7);
+    this.cleanupStaleRooms();
+    let id = generateRoomId();
+    while (this.rooms.has(id)) id = generateRoomId();
     const room: Room = {
       id,
-      name,
+      name: sanitizeName(name, MAX_ROOM_NAME_LENGTH) ?? 'Sala',
       players: [],
       maxPlayers: 4,
       createdAt: new Date(),
     };
     this.rooms.set(id, room);
+    this.touch(id);
     return room;
   }
 
   getRoom(id: string): Room | undefined {
     const room = this.rooms.get(id);
     // Garante compatibilidade com jogos antigos
-    if (room?.gameState && !room.gameState.gameEvents) {
-      room.gameState.gameEvents = [];
+    if (room?.gameState) {
+      room.gameState.gameEvents ??= [];
+      room.gameState.roundResults ??= [];
     }
     return room;
   }
 
   getAllRooms(): Room[] {
+    this.cleanupStaleRooms();
     return Array.from(this.rooms.values());
+  }
+
+  getRoomSummaries(): RoomSummary[] {
+    return this.getAllRooms().map((room) => ({
+      id: room.id,
+      name: room.name,
+      playerCount: room.players.length,
+      maxPlayers: room.maxPlayers,
+      inGame: !!room.gameState?.gameStarted && !room.gameState.winner,
+    }));
+  }
+
+  /**
+   * Visão da sala para um jogador: esconde as cartas dos demais.
+   * Nunca retorne `getRoom()` diretamente em uma API pública.
+   */
+  getRoomView(id: string, viewerId?: string | null): Room | undefined {
+    const room = this.getRoom(id);
+    if (!room) return undefined;
+
+    const redact = (p: Player): Player => ({
+      ...p,
+      hand: p.id === viewerId ? p.hand : [],
+      handCount: p.hand.length,
+    });
+
+    const players = room.players.map(redact);
+    const view: Room = { ...room, players };
+    if (room.gameState) {
+      view.gameState = { ...room.gameState, players: room.gameState.players.map(redact) };
+    }
+    return view;
   }
 
   joinRoom(roomId: string, player: Player): boolean {
     const room = this.rooms.get(roomId);
     if (!room || room.players.length >= room.maxPlayers) {
+      return false;
+    }
+
+    // Não entra em jogo em andamento
+    if (room.gameState?.gameStarted) {
+      return false;
+    }
+
+    const name = sanitizeName(player.name, MAX_NAME_LENGTH);
+    if (!name) return false;
+    player.name = name;
+
+    // Nomes duplicados na mesma sala confundem a mesa
+    if (room.players.some((p) => p.name.toLowerCase() === name.toLowerCase())) {
       return false;
     }
 
@@ -60,26 +156,55 @@ class GameManager {
     player.team = team1Count <= team2Count ? 1 : 2;
 
     room.players.push(player);
+    this.touch(roomId);
     return true;
   }
 
   leaveRoom(roomId: string, playerId: string): boolean {
     const room = this.rooms.get(roomId);
     if (!room) return false;
+    if (!room.players.some((p) => p.id === playerId)) return false;
+
+    // Sair no meio da partida a encerra (sem o jogador a mesa não fecha)
+    if (room.gameState) {
+      room.gameState = undefined;
+      room.players.forEach((p) => {
+        p.isReady = false;
+        p.hand = [];
+      });
+    }
 
     room.players = room.players.filter((p) => p.id !== playerId);
+    // Reequilibra os times (assentos alternam 1,2,1,2)
+    room.players.forEach((p, i) => (p.team = i % 2 === 0 ? 1 : 2));
 
     // Remove sala se vazia
     if (room.players.length === 0) {
       this.rooms.delete(roomId);
+      this.activity.delete(roomId);
+    } else {
+      this.touch(roomId);
     }
 
     return true;
   }
 
-  startGame(roomId: string): GameState | null {
+  startGame(roomId: string, requesterId?: string): GameState | null {
     const room = this.rooms.get(roomId);
-    if (!room || room.players.length < 2) {
+    if (!room) return null;
+
+    // Só quem está na sala pode iniciar
+    if (requesterId !== undefined && !room.players.some((p) => p.id === requesterId)) {
+      return null;
+    }
+
+    // Truco é 1x1 ou 2x2
+    if (room.players.length !== 2 && room.players.length !== 4) {
+      return null;
+    }
+
+    // Já existe jogo em andamento
+    if (room.gameState?.gameStarted) {
       return null;
     }
 
@@ -89,8 +214,12 @@ class GameManager {
       return null;
     }
 
+    // Assentos alternam entre os times
+    room.players.forEach((p, i) => (p.team = i % 2 === 0 ? 1 : 2));
+
     const gameState = initializeGame(room.players, roomId);
     room.gameState = gameState;
+    this.touch(roomId);
     return gameState;
   }
 
@@ -106,7 +235,12 @@ class GameManager {
     const player = game.players.find((p) => p.id === playerId);
     const currentPlayer = game.players[game.currentPlayerIndex];
 
-    if (!player || player.id !== currentPlayer.id || game.waitingForResponse) {
+    if (
+      !player ||
+      player.id !== currentPlayer.id ||
+      game.waitingForResponse ||
+      game.winner
+    ) {
       return null;
     }
 
@@ -130,6 +264,7 @@ class GameManager {
       this.evaluateRound(roomId);
     }
 
+    this.touch(roomId);
     return game;
   }
 
@@ -140,61 +275,51 @@ class GameManager {
     const game = room.gameState;
     const manilhaRank = getManilha(game.vira!);
 
-    // Encontra o índice da carta vencedora
-    let highestCardIndex = 0;
-    let highestCard = game.playedCards[0].card;
+    const leaderId = game.playedCards[0].playerId;
+    const leaderIndex = game.players.findIndex((p) => p.id === leaderId);
 
-    for (let i = 1; i < game.playedCards.length; i++) {
-      const comparison = compareCards(game.playedCards[i].card, highestCard, manilhaRank);
-      if (comparison > 0) {
-        highestCard = game.playedCards[i].card;
-        highestCardIndex = i;
-      }
-    }
-
-    // Encontra o jogador vencedor
-    const winnerPlayerId = game.playedCards[highestCardIndex].playerId;
-    const winnerPlayerIndex = game.players.findIndex((p) => p.id === winnerPlayerId);
-    const winnerPlayer = game.players[winnerPlayerIndex];
-
-    const winningTeam = winnerPlayer.team;
-
-    // Salva informações da rodada vencedora para exibição
-    game.lastWinningCard = highestCard;
-    game.lastWinningPlayerId = winnerPlayerId;
-
-    if (winningTeam === 1) {
-      game.roundsWon.team1++;
-    } else if (winningTeam === 2) {
-      game.roundsWon.team2++;
-    }
-
-    // Cria evento de rodada vencida
-    game.gameEvents.push({
-      type: 'round_won',
-      team: winningTeam,
-      winningCard: highestCard,
-      winningPlayerName: winnerPlayer.name,
-      timestamp: Date.now(),
-    });
-
-    // Salva quem ganhou para jogar primeiro na próxima rodada
-    game.lastRoundWinner = winnerPlayerIndex;
-
-    game.playedCards = [];
+    const outcome = evaluatePlayedCards(game.playedCards, game.players, manilhaRank);
+    game.roundResults ??= [];
+    game.roundResults.push(outcome.team);
     game.currentRound++;
 
-    // Verifica se alguém ganhou a mão (melhor de 3)
-    if (game.roundsWon.team1 >= 2) {
-      this.endHand(roomId, 1);
-    } else if (game.roundsWon.team2 >= 2) {
-      this.endHand(roomId, 2);
-    } else if (game.currentRound > 3) {
-      // Empate - ninguém ganha
-      this.startNewHand(roomId);
+    if (outcome.team === 0) {
+      // Empate: quem abriu a rodada abre a próxima
+      game.lastWinningCard = undefined;
+      game.lastWinningPlayerId = undefined;
+      game.lastRoundWinner = undefined;
+      this.pushEvent(game, { type: 'round_tied', team: 0 });
+      game.currentPlayerIndex = leaderIndex;
     } else {
-      // Próxima rodada: quem ganhou joga primeiro
-      game.currentPlayerIndex = game.lastRoundWinner;
+      const winning = game.playedCards[outcome.winnerIndex];
+      const winnerPlayerIndex = game.players.findIndex((p) => p.id === winning.playerId);
+      const winnerPlayer = game.players[winnerPlayerIndex];
+
+      game.lastWinningCard = winning.card;
+      game.lastWinningPlayerId = winning.playerId;
+      game.lastRoundWinner = winnerPlayerIndex;
+      if (outcome.team === 1) game.roundsWon.team1++;
+      else game.roundsWon.team2++;
+
+      this.pushEvent(game, {
+        type: 'round_won',
+        team: outcome.team,
+        winningCard: winning.card,
+        winningPlayerName: winnerPlayer.name,
+      });
+
+      // Quem ganhou joga primeiro na próxima rodada
+      game.currentPlayerIndex = winnerPlayerIndex;
+    }
+
+    game.playedCards = [];
+
+    const handWinner = resolveHand(game.roundResults);
+    if (handWinner === 1 || handWinner === 2) {
+      this.endHand(roomId, handWinner);
+    } else if (handWinner === 0) {
+      // Todas as rodadas empataram: mão anulada, ninguém pontua
+      this.startNewHand(roomId);
     }
   }
 
@@ -211,13 +336,7 @@ class GameManager {
       game.score.team2 += points;
     }
 
-    // Cria evento de mão vencida
-    game.gameEvents.push({
-      type: 'hand_won',
-      team: winningTeam,
-      points,
-      timestamp: Date.now(),
-    });
+    this.pushEvent(game, { type: 'hand_won', team: winningTeam, points });
 
     // Verifica vitória (12 pontos)
     if (game.score.team1 >= 12 || game.score.team2 >= 12) {
@@ -247,9 +366,14 @@ class GameManager {
     game.currentRound = 1;
     game.playedCards = [];
     game.roundsWon = { team1: 0, team2: 0 };
+    game.roundResults = [];
     game.trucoState = 'none';
     game.waitingForResponse = false;
     game.trucoCalledBy = undefined;
+    game.lastRaiseTeam = undefined;
+    game.lastRoundWinner = undefined;
+    game.lastWinningCard = undefined;
+    game.lastWinningPlayerId = undefined;
     game.vira = vira;
     game.dealer = (game.dealer + 1) % game.players.length;
     game.currentPlayerIndex = (game.dealer + 1) % game.players.length;
@@ -270,17 +394,30 @@ class GameManager {
     if (!room || !room.gameState) return;
 
     const game = room.gameState;
+    game.winner = winningTeam;
+    game.waitingForResponse = false;
+    game.trucoCalledBy = undefined;
 
-    // Cria evento de jogo vencido
-    game.gameEvents.push({
+    this.pushEvent(game, {
       type: 'game_won',
       team: winningTeam,
       points: game.score[`team${winningTeam}` as 'team1' | 'team2'],
-      timestamp: Date.now(),
     });
+  }
 
-    // Aguarda um tempo para exibir a celebração antes de resetar
-    // O reset será feito pelo frontend após o usuário dismissar a celebração
+  /** Volta ao lobby depois que o jogo acabou (revanche). */
+  resetGame(roomId: string, playerId: string): boolean {
+    const room = this.rooms.get(roomId);
+    if (!room || !room.players.some((p) => p.id === playerId)) return false;
+    if (room.gameState && !room.gameState.winner) return false;
+
+    room.gameState = undefined;
+    room.players.forEach((p) => {
+      p.isReady = false;
+      p.hand = [];
+    });
+    this.touch(roomId);
+    return true;
   }
 
   callTruco(roomId: string, playerId: string): GameState | null {
@@ -288,84 +425,82 @@ class GameManager {
     if (!room || !room.gameState) return null;
 
     const game = room.gameState;
-    const player = game.players.find((p) => p.id === playerId);
-    if (!player || game.waitingForResponse) return null;
+    if (!canCallTruco(game, playerId)) return null;
 
-    // Não pode pedir truco em mão de ferro
-    if (game.isMaoDeFerro) return null;
-
-    // Time com 11 pontos não pode pedir truco (apenas responder)
-    if (game.isMaoDe11?.team1 && player.team === 1) return null;
-    if (game.isMaoDe11?.team2 && player.team === 2) return null;
-
-    // Apenas pode pedir truco quem tem a vez OU quem já jogou nesta rodada
-    const playerIndex = game.players.findIndex((p) => p.id === playerId);
-    const isCurrentPlayer = playerIndex === game.currentPlayerIndex;
-    const hasPlayedThisRound = game.playedCards.some(
-      (pc) => pc.playerId === playerId
-    );
-
-    if (!isCurrentPlayer && !hasPlayedThisRound) {
-      return null; // Jogador não pode pedir truco agora
-    }
-
-    const nextState = getNextTrucoState(game.trucoState);
-    if (!nextState) return null;
-
+    const player = game.players.find((p) => p.id === playerId)!;
     game.waitingForResponse = true;
     game.trucoCalledBy = player.team; // Rastreia qual time pediu
+    game.lastRaiseTeam = player.team;
+    this.touch(roomId);
     return game;
   }
 
+  /**
+   * Responde a um pedido de truco.
+   * `raise` aceita e já aumenta a aposta (ex.: truco -> seis).
+   */
   respondTruco(
     roomId: string,
     playerId: string,
-    accept: boolean
+    accept: boolean,
+    raise = false
   ): GameState | null {
     const room = this.rooms.get(roomId);
     if (!room || !room.gameState) return null;
 
     const game = room.gameState;
-    if (!game.waitingForResponse || !game.trucoCalledBy) return null;
+    if (game.winner || !game.waitingForResponse || !game.trucoCalledBy) return null;
 
     const player = game.players.find((p) => p.id === playerId);
     if (!player) return null;
 
     // Apenas jogadores do time ADVERSÁRIO podem responder
     if (player.team === game.trucoCalledBy) {
-      return null; // Jogador do mesmo time que pediu não pode responder
+      return null;
     }
-
-    game.waitingForResponse = false;
 
     if (accept) {
       const nextState = getNextTrucoState(game.trucoState);
-      if (nextState) {
-        game.trucoState = nextState;
-        game.roundScore = getTrucoValue(nextState);
+      if (!nextState) return null;
+
+      let canRaise = false;
+      if (raise) {
+        const blocked =
+          (player.team === 1 && game.isMaoDe11?.team1) ||
+          (player.team === 2 && game.isMaoDe11?.team2);
+        canRaise = !blocked && getNextTrucoState(nextState) !== null;
+        if (!canRaise) return null;
       }
-      game.trucoCalledBy = undefined; // Reset após aceitar
+
+      game.trucoState = nextState;
+      game.roundScore = getTrucoValue(nextState);
+      game.waitingForResponse = false;
+      game.trucoCalledBy = undefined;
+
+      if (canRaise) {
+        game.waitingForResponse = true;
+        game.trucoCalledBy = player.team;
+        game.lastRaiseTeam = player.team;
+      }
     } else {
       // Recusou - time que PEDIU o truco ganha a mão com os pontos atuais
       const winningTeam = game.trucoCalledBy;
       const currentPoints = getTrucoValue(game.trucoState);
 
-      // Ganha com os pontos do estado atual (antes do aumento)
+      game.waitingForResponse = false;
+      game.trucoCalledBy = undefined;
+
       if (winningTeam === 1) {
         game.score.team1 += currentPoints;
       } else {
         game.score.team2 += currentPoints;
       }
 
-      // Cria evento de truco recusado
-      game.gameEvents.push({
+      this.pushEvent(game, {
         type: 'truco_refused',
         team: winningTeam,
         points: currentPoints,
-        timestamp: Date.now(),
       });
-
-      game.trucoCalledBy = undefined;
 
       // Verifica vitória ou inicia nova mão
       if (game.score.team1 >= 12 || game.score.team2 >= 12) {
@@ -375,6 +510,7 @@ class GameManager {
       }
     }
 
+    this.touch(roomId);
     return game;
   }
 
@@ -384,11 +520,14 @@ class GameManager {
 
     const player = room.players.find((p) => p.id === playerId);
     if (!player) return false;
+    if (room.gameState?.gameStarted) return false;
 
     player.isReady = ready;
+    this.touch(roomId);
     return true;
   }
 }
 
-// Singleton instance
-export const gameManager = new GameManager();
+// Singleton (via globalThis para sobreviver ao hot reload do Next em dev)
+const globalForGame = globalThis as unknown as { __trucoGameManager?: GameManager };
+export const gameManager = (globalForGame.__trucoGameManager ??= new GameManager());

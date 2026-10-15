@@ -9,6 +9,7 @@ import {
   getManilhaValue,
   compareCards,
   determineRoundWinner,
+  resolveHand,
   getTrucoValue,
   getNextTrucoState,
   checkMaoDe11,
@@ -162,32 +163,13 @@ describe('Truco Logic', () => {
   });
 
   describe('getManilhaValue', () => {
-    it('should return correct value for Zap (ouros)', () => {
-      const card: Card = { suit: 'ouros', rank: '7', value: 4 };
-      const value = getManilhaValue(card);
-
-      expect(value).toBe(14); // Ouros é a mais forte
-    });
-
-    it('should return correct value for Escopeta (espadas)', () => {
-      const card: Card = { suit: 'espadas', rank: '7', value: 4 };
-      const value = getManilhaValue(card);
-
-      expect(value).toBe(13);
-    });
-
-    it('should return correct value for Espadilha (copas)', () => {
-      const card: Card = { suit: 'copas', rank: '7', value: 4 };
-      const value = getManilhaValue(card);
-
-      expect(value).toBe(12);
-    });
-
-    it('should return correct value for Paus (paus)', () => {
-      const card: Card = { suit: 'paus', rank: '7', value: 4 };
-      const value = getManilhaValue(card);
-
-      expect(value).toBe(11);
+    it.each([
+      ['paus', 14],
+      ['copas', 13],
+      ['espadas', 12],
+      ['ouros', 11],
+    ] as const)('should rank %s manilha as %i', (suit, expected) => {
+      expect(getManilhaValue({ suit, rank: '7', value: 4 })).toBe(expected);
     });
   });
 
@@ -228,9 +210,9 @@ describe('Truco Logic', () => {
       expect(result).toBeGreaterThan(0);
     });
 
-    it('should compare manilhas by suit (Zap > Escopeta)', () => {
-      const zap: Card = { suit: 'ouros', rank: '7', value: 4 };
-      const escopeta: Card = { suit: 'espadas', rank: '7', value: 4 };
+    it('should compare manilhas by suit (Zap > Copas)', () => {
+      const zap: Card = { suit: 'paus', rank: '7', value: 4 };
+      const escopeta: Card = { suit: 'copas', rank: '7', value: 4 };
 
       const result = compareCards(zap, escopeta, '7');
 
@@ -263,7 +245,7 @@ describe('Truco Logic', () => {
       expect(winner).toBe(-1);
     });
 
-    it('should give priority to first card in case of tie', () => {
+    it('should return 0 (empate) when equal cards are from opposing teams', () => {
       const playedCards = [
         { playerId: '1', card: { suit: 'ouros' as const, rank: 'A' as const, value: 8 } },
         { playerId: '2', card: { suit: 'espadas' as const, rank: 'A' as const, value: 8 } },
@@ -271,7 +253,44 @@ describe('Truco Logic', () => {
 
       const winner = determineRoundWinner(playedCards, players, 'K');
 
-      expect(winner).toBe(1); // Team 1 (first card)
+      expect(winner).toBe(0);
+    });
+
+    it('should not count a tie between partners', () => {
+      const playedCards = [
+        { playerId: '1', card: { suit: 'ouros' as const, rank: 'A' as const, value: 8 } },
+        { playerId: '3', card: { suit: 'espadas' as const, rank: 'A' as const, value: 8 } },
+        { playerId: '2', card: { suit: 'copas' as const, rank: '4' as const, value: 1 } },
+      ];
+
+      expect(determineRoundWinner(playedCards, players, 'K')).toBe(1);
+    });
+  });
+
+  describe('resolveHand', () => {
+    it('1ª ganha e 2ª ganha -> mão acabou', () => {
+      expect(resolveHand([1, 1])).toBe(1);
+    });
+    it('1ª ganha e 2ª empata -> quem ganhou a 1ª', () => {
+      expect(resolveHand([2, 0])).toBe(2);
+    });
+    it('1ª empata e 2ª ganha -> quem ganhou a 2ª', () => {
+      expect(resolveHand([0, 1])).toBe(1);
+    });
+    it('1x1 e 3ª decide', () => {
+      expect(resolveHand([1, 2])).toBeNull();
+      expect(resolveHand([1, 2, 2])).toBe(2);
+    });
+    it('1x1 e 3ª empata -> quem ganhou a 1ª', () => {
+      expect(resolveHand([1, 2, 0])).toBe(1);
+    });
+    it('0x0 segue para a 3ª; tudo empatado anula a mão', () => {
+      expect(resolveHand([0, 0])).toBeNull();
+      expect(resolveHand([0, 0, 2])).toBe(2);
+      expect(resolveHand([0, 0, 0])).toBe(0);
+    });
+    it('uma rodada apenas nunca decide', () => {
+      expect(resolveHand([1])).toBeNull();
     });
   });
 
@@ -423,11 +442,11 @@ describe('Truco Logic', () => {
   describe('compareCards - All Manilha Combinations', () => {
     const manilhaRank = '5'; // Vira é 4, então manilha é 5
 
-    // Manilhas: Zap (ouros)=14, Escopeta (espadas)=13, Espadilha (copas)=12, Paus (paus)=11
-    const zap: Card = { rank: '5', suit: 'ouros', value: 2 };
-    const escopeta: Card = { rank: '5', suit: 'espadas', value: 2 };
-    const espadilha: Card = { rank: '5', suit: 'copas', value: 2 };
-    const paus: Card = { rank: '5', suit: 'paus', value: 2 };
+    // Manilhas: Zap (paus) > Copas > Espadas > Ouros
+    const zap: Card = { rank: '5', suit: 'paus', value: 2 };
+    const escopeta: Card = { rank: '5', suit: 'copas', value: 2 };
+    const espadilha: Card = { rank: '5', suit: 'espadas', value: 2 };
+    const paus: Card = { rank: '5', suit: 'ouros', value: 2 };
 
     it('should compare Zap > Escopeta', () => {
       expect(compareCards(zap, escopeta, manilhaRank)).toBeGreaterThan(0);

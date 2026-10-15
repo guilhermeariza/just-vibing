@@ -7,20 +7,19 @@ export async function POST(
 ) {
   try {
     const { roomId } = await params;
-    const gameState = gameManager.startGame(roomId);
+    const body = await request.json();
+    const { playerId } = body;
 
-    if (!gameState) {
-      return NextResponse.json(
-        { error: 'Não foi possível iniciar o jogo. Verifique se todos estão prontos.' },
-        { status: 400 }
-      );
+    if (typeof playerId !== 'string' || !playerId) {
+      return NextResponse.json({ error: 'ID do jogador é obrigatório' }, { status: 400 });
     }
 
-    return NextResponse.json(gameState);
-  } catch (error) {
-    return NextResponse.json(
-      { error: 'Erro ao iniciar jogo' },
-      { status: 500 }
-    );
+    if (!gameManager.startGame(roomId, playerId)) {
+      return NextResponse.json({ error: 'Não foi possível iniciar o jogo. São necessários 2 ou 4 jogadores, todos prontos.' }, { status: 400 });
+    }
+
+    return NextResponse.json({ success: true });
+  } catch {
+    return NextResponse.json({ error: 'Erro interno' }, { status: 500 });
   }
 }

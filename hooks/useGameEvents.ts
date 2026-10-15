@@ -1,37 +1,44 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { GameEvent } from '@/types/game';
 
+/**
+ * Fila de eventos para feedback visual. Eventos que já existiam quando o
+ * jogador abriu/recarregou a página são ignorados (não reexibe o histórico).
+ */
 export function useGameEvents(events: GameEvent[] | undefined) {
   const [currentEvent, setCurrentEvent] = useState<GameEvent | null>(null);
-  const [processedEvents, setProcessedEvents] = useState<Set<number>>(new Set());
+  const processed = useRef<Set<string>>(new Set());
+  const initialized = useRef(false);
+  const [, force] = useState(0);
 
   useEffect(() => {
-    if (!events || events.length === 0) return;
+    if (!events) return;
 
-    // Find the first unprocessed event
-    const unprocessedEvent = events.find(
-      (event) => !processedEvents.has(event.timestamp)
-    );
-
-    if (unprocessedEvent && !currentEvent) {
-      setCurrentEvent(unprocessedEvent);
+    if (!initialized.current) {
+      initialized.current = true;
+      events.forEach((e) => processed.current.add(e.id));
+      force((n) => n + 1);
+      return;
     }
-  }, [events, currentEvent, processedEvents]);
 
-  const dismissCurrentEvent = () => {
-    if (currentEvent) {
-      setProcessedEvents((prev) => new Set(prev).add(currentEvent.timestamp));
-      setCurrentEvent(null);
-    }
-  };
+    if (currentEvent) return;
+    const next = events.find((e) => !processed.current.has(e.id));
+    if (next) setCurrentEvent(next);
+  }, [events, currentEvent]);
+
+  const dismissCurrentEvent = useCallback(() => {
+    setCurrentEvent((cur) => {
+      if (cur) processed.current.add(cur.id);
+      return null;
+    });
+  }, []);
 
   return {
     currentEvent,
     dismissCurrentEvent,
-    hasUnprocessedEvents: events?.some(
-      (event) => !processedEvents.has(event.timestamp)
-    ) || false,
+    hasUnprocessedEvents:
+      events?.some((e) => !processed.current.has(e.id)) || false,
   };
 }

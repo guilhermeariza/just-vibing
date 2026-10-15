@@ -1,5 +1,6 @@
 'use client';
 
+import { useMemo } from 'react';
 import { GameEvent } from '@/types/game';
 import { ModernCard } from '@/components/modern/ModernCard';
 import { getCardSymbol } from '@/lib/truco-logic';
@@ -11,6 +12,17 @@ interface GameEventModalProps {
 }
 
 export function GameEventModal({ event, onDismiss, myTeam }: GameEventModalProps) {
+  // Posições do confete fixas (evita "pular" a cada re-render do polling)
+  const confetti = useMemo(
+    () =>
+      Array.from({ length: 50 }, () => ({
+        left: Math.random() * 100,
+        delay: Math.random() * 0.5,
+        duration: 2 + Math.random() * 2,
+      })),
+    []
+  );
+
   if (!event) return null;
 
   const isMyTeamWinner = myTeam === event.team;
@@ -26,6 +38,14 @@ export function GameEventModal({ event, onDismiss, myTeam }: GameEventModalProps
             ? 'from-green-500 to-green-700'
             : 'from-gray-500 to-gray-700',
           showCard: true,
+        };
+
+      case 'round_tied':
+        return {
+          title: '🤝 EMPATOU!',
+          subtitle: 'As cartas mais fortes empataram (embuchou)',
+          bgGradient: 'from-gray-500 to-gray-700',
+          showCard: false,
         };
 
       case 'hand_won':
@@ -86,15 +106,15 @@ export function GameEventModal({ event, onDismiss, myTeam }: GameEventModalProps
         {/* Confetti effect for game won */}
         {event.type === 'game_won' && isMyTeamWinner && (
           <div className="absolute inset-0 overflow-hidden rounded-2xl pointer-events-none">
-            {[...Array(50)].map((_, i) => (
+            {confetti.map((c, i) => (
               <div
                 key={i}
                 className="absolute w-2 h-2 bg-gradient-to-br from-yellow-300 to-yellow-500 rounded-full animate-confetti"
                 style={{
-                  left: `${Math.random() * 100}%`,
+                  left: `${c.left}%`,
                   top: '-10%',
-                  animationDelay: `${Math.random() * 0.5}s`,
-                  animationDuration: `${2 + Math.random() * 2}s`,
+                  animationDelay: `${c.delay}s`,
+                  animationDuration: `${c.duration}s`,
                 }}
               />
             ))}

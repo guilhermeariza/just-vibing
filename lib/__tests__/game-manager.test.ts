@@ -883,3 +883,121 @@ describe('GameManager', () => {
     });
   });
 });
+
+describe('GameManager - regras e segurança (revisão)', () => {
+  const mk = (id: string, name = id): Player => ({
+    id, name, hand: [], team: 1, isReady: true,
+  });
+
+  function startedGame(n = 2) {
+    // @ts-ignore
+    gameManager['rooms'].clear();
+    const room = gameManager.createRoom('Sala');
+    for (let i = 0; i < n; i++) gameManager.joinRoom(room.id, mk(`p${i}`));
+    gameManager.startGame(room.id);
+    return { room: gameManager.getRoom(room.id)!, game: gameManager.getRoom(room.id)!.gameState! };
+  }
+
+  it('não revela as cartas dos adversários na visão do jogador', () => {
+    const { room } = startedGame(2);
+    const view = gameManager.getRoomView(room.id, 'p0')!;
+    expect(view.gameState!.players[0].hand).toHaveLength(3);
+    expect(view.gameState!.players[1].hand).toHaveLength(0);
+    expect(view.players[1].hand).toHaveLength(0);
+    expect(view.players[1].handCount).toBe(3);
+    // observador (sem id) não vê nada
+    const anon = gameManager.getRoomView(room.id, null)!;
+    expect(anon.gameState!.players.every((p) => p.hand.length === 0)).toBe(true);
+  });
+
+  it('só inicia com 2 ou 4 jogadores', () => {
+    // @ts-ignore
+    gameManager['rooms'].clear();
+    const room = gameManager.createRoom('Sala');
+    ['a', 'b', 'c'].forEach((id) => gameManager.joinRoom(room.id, mk(id)));
+    expect(gameManager.startGame(room.id)).toBeNull();
+  });
+
+  it('rejeita nome duplicado e entrada em jogo iniciado', () => {
+    const { room } = startedGame(2);
+    expect(gameManager.joinRoom(room.id, mk('x', 'p0'))).toBe(false);
+    expect(gameManager.joinRoom(room.id, mk('y', 'novo'))).toBe(false);
+  });
+
+  it('sair no meio da partida encerra o jogo e volta ao lobby', () => {
+    const { room } = startedGame(2);
+    gameManager.leaveRoom(room.id, 'p1');
+    const after = gameManager.getRoom(room.id)!;
+    expect(after.gameState).toBeUndefined();
+    expect(after.players.every((p) => !p.isReady)).toBe(true);
+  });
+
+  it('quem pediu o último aumento não pode aumentar de novo; adversário pode', () => {
+    const { room, game } = startedGame(2);
+    const caller = game.players[game.currentPlayerIndex];
+    expect(gameManager.callTruco(room.id, caller.id)).not.toBeNull();
+    const other = game.players.find((p) => p.id !== caller.id)!;
+    expect(gameManager.respondTruco(room.id, other.id, true)).not.toBeNull();
+    expect(game.trucoState).toBe('truco');
+    // time que pediu não pode pedir seis logo em seguida
+    expect(gameManager.callTruco(room.id, caller.id)).toBeNull();
+  });
+
+  it('aceitar e aumentar (truco -> seis) passa a vez de responder ao outro time', () => {
+    const { room, game } = startedGame(2);
+    const caller = game.players[game.currentPlayerIndex];
+    const other = game.players.find((p) => p.id !== caller.id)!;
+    gameManager.callTruco(room.id, caller.id);
+    gameManager.respondTruco(room.id, other.id, true, true);
+    expect(game.trucoState).toBe('truco');
+    expect(game.waitingForResponse).toBe(true);
+    expect(game.trucoCalledBy).toBe(other.team);
+    // o próprio time que aumentou não responde
+    expect(gameManager.respondTruco(room.id, other.id, true)).toBeNull();
+    gameManager.respondTruco(room.id, caller.id, true);
+    expect(game.trucoState).toBe('seis');
+  });
+
+  it('empate na rodada mantém quem abriu e não pontua', () => {
+    const { room, game } = startedGame(2);
+    game.vira = { suit: 'ouros', rank: '4', value: 1 }; // manilha = 5
+    const [a, b] = game.players;
+    a.hand = [{ suit: 'copas', rank: 'A', value: 8 }, { suit: 'ouros', rank: '6', value: 3 }, { suit: 'ouros', rank: 'Q', value: 5 }];
+    b.hand = [{ suit: 'paus', rank: 'A', value: 8 }, { suit: 'espadas', rank: 'K', value: 7 }, { suit: 'espadas', rank: 'Q', value: 5 }];
+    game.currentPlayerIndex = 0;
+    gameManager.playCard(room.id, a.id, 0);
+    gameManager.playCard(room.id, b.id, 0);
+    expect(game.roundResults).toEqual([0]);
+    expect(game.currentPlayerIndex).toBe(0);
+    expect(game.score).toEqual({ team1: 0, team2: 0 });
+    // 2ª rodada: b vence -> b leva a mão (1ª empatada)
+    gameManager.playCard(room.id, a.id, 0);
+    gameManager.playCard(room.id, b.id, 0);
+    expect(game.score.team2 + game.score.team1).toBe(1);
+  });
+
+  it('fim de jogo define vencedor, bloqueia jogadas e permite revanche', () => {
+    const { room, game } = startedGame(2);
+    game.score.team1 = 11;
+    game.isMaoDe11 = { team1: true, team2: false };
+    game.vira = { suit: 'ouros', rank: '4', value: 1 };
+    const [a, b] = game.players;
+    a.hand = [{ suit: 'paus', rank: '5', value: 2 }, { suit: 'ouros', rank: '6', value: 3 }, { suit: 'ouros', rank: 'Q', value: 5 }];
+    b.hand = [{ suit: 'ouros', rank: '4', value: 1 }, { suit: 'espadas', rank: '6', value: 3 }, { suit: 'espadas', rank: 'Q', value: 5 }];
+    game.currentPlayerIndex = 0;
+    gameManager.playCard(room.id, a.id, 0);
+    gameManager.playCard(room.id, b.id, 0);
+    gameManager.playCard(room.id, a.id, 0);
+    gameManager.playCard(room.id, b.id, 0);
+    expect(game.winner).toBe(1);
+    expect(gameManager.playCard(room.id, a.id, 0)).toBeNull();
+    expect(gameManager.callTruco(room.id, a.id)).toBeNull();
+    expect(gameManager.resetGame(room.id, a.id)).toBe(true);
+    expect(gameManager.getRoom(room.id)!.gameState).toBeUndefined();
+  });
+
+  it('não permite reset com jogo em andamento', () => {
+    const { room } = startedGame(2);
+    expect(gameManager.resetGame(room.id, 'p0')).toBe(false);
+  });
+});

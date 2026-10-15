@@ -1,5 +1,7 @@
 # 🚀 Guia de Deploy - Truco Online
 
+> ⚠️ **Use um host de processo único** (Docker/Render/Railway/Fly ou `npm start`). Na Vercel (serverless) o estado em memória das salas não é compartilhado entre instâncias e as salas podem sumir. Há um `Dockerfile` na raiz.
+
 ## ✅ Pré-requisitos
 
 Antes de fazer o deploy, verifique:

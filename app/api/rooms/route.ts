@@ -1,15 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { gameManager } from '@/lib/game-manager';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET() {
-  const rooms = gameManager.getAllRooms();
-  return NextResponse.json(rooms);
+  return NextResponse.json(gameManager.getRoomSummaries());
 }
 
 export async function POST(request: NextRequest) {
   try {
     const { name } = await request.json();
-    if (!name || typeof name !== 'string') {
+    if (typeof name !== 'string' || !name.trim()) {
       return NextResponse.json(
         { error: 'Nome da sala é obrigatório' },
         { status: 400 }
@@ -17,11 +18,8 @@ export async function POST(request: NextRequest) {
     }
 
     const room = gameManager.createRoom(name);
-    return NextResponse.json(room);
-  } catch (error) {
-    return NextResponse.json(
-      { error: 'Erro ao criar sala' },
-      { status: 500 }
-    );
+    return NextResponse.json({ id: room.id, name: room.name });
+  } catch {
+    return NextResponse.json({ error: 'Erro ao criar sala' }, { status: 500 });
   }
 }

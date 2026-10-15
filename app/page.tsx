@@ -18,6 +18,7 @@ export default function Home() {
   const router = useRouter();
 
   const createRoom = async () => {
+    if (creating) return;
     if (!roomName.trim() || !playerName.trim()) {
       toast.error('Preencha todos os campos');
       return;
@@ -44,7 +45,10 @@ export default function Home() {
         body: JSON.stringify({ playerName }),
       });
 
-      if (!joinResponse.ok) throw new Error('Erro ao entrar na sala');
+      if (!joinResponse.ok) {
+        const data = await joinResponse.json().catch(() => null);
+        throw new Error(data?.error ?? 'Erro ao entrar na sala');
+      }
 
       const { player } = await joinResponse.json();
 
@@ -83,7 +87,10 @@ export default function Home() {
         body: JSON.stringify({ playerName }),
       });
 
-      if (!response.ok) throw new Error('Erro ao entrar na sala');
+      if (!response.ok) {
+        const data = await response.json().catch(() => null);
+        throw new Error(data?.error ?? 'Erro ao entrar na sala');
+      }
 
       const { player } = await response.json();
 
@@ -129,6 +136,7 @@ export default function Home() {
               <input
                 type="text"
                 placeholder="Nome da sala"
+                maxLength={32}
                 value={roomName}
                 onChange={(e) => setRoomName(e.target.value)}
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg mb-2 focus:outline-none focus:ring-2 focus:ring-green-500"
@@ -136,6 +144,8 @@ export default function Home() {
               <input
                 type="text"
                 placeholder="Seu nome"
+                maxLength={24}
+                onKeyDown={(e) => e.key === 'Enter' && createRoom()}
                 value={playerName}
                 onChange={(e) => setPlayerName(e.target.value)}
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg mb-3 focus:outline-none focus:ring-2 focus:ring-green-500"
@@ -172,18 +182,18 @@ export default function Home() {
                   <div>
                     <h3 className="font-semibold text-gray-800">{room.name}</h3>
                     <p className="text-sm text-gray-600">
-                      {room.players.length}/{room.maxPlayers} jogadores
-                      {room.gameState?.gameStarted && (
+                      {room.playerCount}/{room.maxPlayers} jogadores
+                      {room.inGame && (
                         <span className="ml-2 text-yellow-600 font-semibold">• Em jogo</span>
                       )}
                     </p>
                   </div>
                   <button
                     onClick={() => handleJoinRoomClick(room.id)}
-                    disabled={room.players.length >= room.maxPlayers || room.gameState?.gameStarted}
+                    disabled={room.playerCount >= room.maxPlayers || room.inGame}
                     className="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white px-6 py-2 rounded-lg font-semibold transition-colors"
                   >
-                    {room.players.length >= room.maxPlayers ? 'Cheia' : 'Entrar'}
+                    {room.playerCount >= room.maxPlayers ? 'Cheia' : room.inGame ? 'Em jogo' : 'Entrar'}
                   </button>
                 </div>
               ))}

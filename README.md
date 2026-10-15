@@ -26,7 +26,7 @@ Um jogo de truco multijogador mobile-first desenvolvido com Next.js, TypeScript 
 
 ## 🛠️ Tecnologias
 
-- **Next.js 15** - Framework React
+- **Next.js 16** - Framework React
 - **TypeScript** - Tipagem estática
 - **Tailwind CSS** - Estilização
 - **Vercel** - Deploy e hospedagem
@@ -44,7 +44,11 @@ O jogo foi desenvolvido pensando primeiro em dispositivos móveis, garantindo um
 - Sequência: Truco (3) → Seis (6) → Nove (9) → Doze (12)
 - Primeiro time a 12 pontos vence o jogo
 - Manilhas são as cartas mais fortes (definidas pela vira)
-- Ordem das manilhas: Zap (♦) > Escopeta (♠) > Espadilha (♥) > Paus (♣)
+- Ordem das manilhas (por naipe): Zap (♣ paus) > Copas (♥) > Espadas (♠) > Ouros (♦)
+- Empate (embuchada): 1ª empata → vale a 2ª; 2ª/3ª empata → vale quem ganhou a 1ª; tudo empatado anula a mão
+- Quem fez o último aumento não pode aumentar de novo; o adversário pode "aceitar e aumentar"
+- Mão de 11: o time com 11 não pode pedir truco. Mão de ferro (11x11): vale 3, sem truco
+- Jogo em 2 (1x1) ou 4 jogadores (2x2); ao final há revanche voltando ao lobby
 
 ## 🔧 Desenvolvimento Local
 
@@ -78,6 +82,19 @@ Ou use o Vercel CLI:
 npm install -g vercel
 vercel
 ```
+
+## ⚠️ Hospedagem (importante)
+
+O estado das salas fica **em memória de um único processo**. Em serverless (Vercel) cada
+requisição pode cair numa instância diferente e as salas "somem". Para jogar com amigos
+use um host de processo único: `docker build -t truco . && docker run -p 3000:3000 truco`
+(Render, Railway, Fly.io...) ou `npm run build && npm start`. Para Vercel seria preciso
+mover o estado para Redis/Upstash.
+
+## 🔒 Segurança
+
+- As cartas dos adversários nunca saem do servidor (`GET /api/rooms/:id?playerId=...` devolve só a sua mão)
+- IDs de jogador e sala gerados com `crypto`; nomes sanitizados; salas inativas expiram em 3h
 
 ## 📝 Notas Técnicas
 

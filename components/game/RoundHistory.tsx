@@ -42,7 +42,7 @@ export function RoundHistory({ events, myTeam }: RoundHistoryProps) {
 
           return (
             <div
-              key={event.timestamp}
+              key={event.id}
               className={`flex items-center gap-3 p-2 rounded-lg transition-all ${
                 isMyTeamWin
                   ? 'bg-green-500/20 border border-green-400/30'

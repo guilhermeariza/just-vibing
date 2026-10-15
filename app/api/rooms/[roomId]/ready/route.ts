@@ -7,29 +7,22 @@ export async function POST(
 ) {
   try {
     const { roomId } = await params;
-    const { playerId, ready } = await request.json();
+    const body = await request.json();
+    const { playerId, ready } = body;
 
-    if (!playerId || typeof ready !== 'boolean') {
-      return NextResponse.json(
-        { error: 'Parâmetros inválidos' },
-        { status: 400 }
-      );
+    if (typeof playerId !== 'string' || !playerId) {
+      return NextResponse.json({ error: 'ID do jogador é obrigatório' }, { status: 400 });
+    }
+    if (typeof ready !== 'boolean') {
+      return NextResponse.json({ error: 'Parâmetros inválidos' }, { status: 400 });
     }
 
-    const success = gameManager.setPlayerReady(roomId, playerId, ready);
-
-    if (!success) {
-      return NextResponse.json(
-        { error: 'Erro ao atualizar status' },
-        { status: 400 }
-      );
+    if (!gameManager.setPlayerReady(roomId, playerId, ready)) {
+      return NextResponse.json({ error: 'Não foi possível atualizar o status' }, { status: 400 });
     }
 
-    return NextResponse.json({ success: true, room: gameManager.getRoom(roomId) });
-  } catch (error) {
-    return NextResponse.json(
-      { error: 'Erro ao atualizar status' },
-      { status: 500 }
-    );
+    return NextResponse.json({ success: true });
+  } catch {
+    return NextResponse.json({ error: 'Erro interno' }, { status: 500 });
   }
 }

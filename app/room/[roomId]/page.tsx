@@ -11,7 +11,7 @@ import { GameEventModal } from '@/components/game/GameEventModal';
 import { CenterPile } from '@/components/game/CenterPile';
 import { TrucoFireworks } from '@/components/game/TrucoFireworks';
 import { RoundHistory } from '@/components/game/RoundHistory';
-import { getManilha } from '@/lib/truco-logic';
+import { getManilha, canCallTruco, getNextTrucoState } from '@/lib/truco-logic';
 import { soundEffects } from '@/lib/sound-effects';
 import { useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
@@ -19,10 +19,11 @@ import { LoadingSpinner, PlayerCardSkeleton, Spinner } from '@/components/Loadin
 
 export default function RoomPage({ params }: { params: Promise<{ roomId: string }> }) {
   const { roomId } = use(params);
-  const { room, gameState, refetch } = useGameState(roomId);
   const [playerId, setPlayerId] = useState<string | null>(null);
-  const [isReady, setIsReady] = useState(false);
+  const { room, gameState, notFound, refetch } = useGameState(roomId, playerId);
+  const [busy, setBusy] = useState(false);
   const router = useRouter();
+  const { currentEvent, dismissCurrentEvent } = useGameEvents(gameState?.gameEvents);
 
   useEffect(() => {
     // SSR-safe check
@@ -38,119 +39,145 @@ export default function RoomPage({ params }: { params: Promise<{ roomId: string 
 
   const currentPlayer = room?.players.find((p) => p.id === playerId);
   const myTeam = currentPlayer?.team;
+  const isReady = currentPlayer?.isReady ?? false;
+  const myHand =
+    gameState?.players.find((p) => p.id === playerId)?.hand ?? currentPlayer?.hand ?? [];
 
-  const toggleReady = async () => {
-    if (!playerId) return;
+  // Sala sumiu ou eu não estou mais nela (servidor reiniciou, jogo encerrado...)
+  useEffect(() => {
+    if (notFound || (room && playerId && !currentPlayer)) {
+      toast.error('Você não está mais nesta sala');
+      router.push('/');
+    }
+  }, [notFound, room, playerId, currentPlayer, router]);
 
+  // Efeitos sonoros dos eventos
+  useEffect(() => {
+    if (!currentEvent) return;
+    const isMyTeamWinner = currentEvent.team === myTeam;
+
+    switch (currentEvent.type) {
+      case 'round_won':
+        soundEffects.playRoundWon();
+        break;
+      case 'hand_won':
+        soundEffects.playHandWon();
+        break;
+      case 'game_won':
+        if (isMyTeamWinner) {
+          soundEffects.playGameWon();
+        } else {
+          soundEffects.playGameLost();
+        }
+        break;
+      case 'truco_refused':
+        soundEffects.playTrucoRefused();
+        break;
+    }
+  }, [currentEvent, myTeam]);
+
+  /** POST com tratamento de erro padrão; devolve true se deu certo. */
+  const post = async (url: string, body: object, errorMsg: string) => {
+    if (busy) return false;
+    setBusy(true);
     try {
-      await fetch(`/api/rooms/${roomId}/ready`, {
+      const response = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ playerId, ready: !isReady }),
+        body: JSON.stringify(body),
       });
-      setIsReady(!isReady);
+      if (!response.ok) {
+        const data = await response.json().catch(() => null);
+        toast.error(data?.error ?? errorMsg);
+        return false;
+      }
+      return true;
+    } catch {
+      toast.error(errorMsg);
+      return false;
+    } finally {
+      setBusy(false);
       refetch();
-    } catch (error) {
-      console.error('Erro ao atualizar status:', error);
     }
   };
 
+  const toggleReady = async () => {
+    if (!playerId) return;
+    await post(
+      `/api/rooms/${roomId}/ready`,
+      { playerId, ready: !isReady },
+      'Erro ao atualizar status'
+    );
+  };
+
   const startGame = async () => {
-    const toastId = toast.loading('Iniciando jogo...');
-    try {
-      const response = await fetch(`/api/rooms/${roomId}/start`, {
-        method: 'POST',
-      });
-
-      if (!response.ok) {
-        throw new Error('Verifique se todos estão prontos');
-      }
-
-      toast.success('Jogo iniciado!', { id: toastId });
-      refetch();
-    } catch (error) {
-      toast.error(
-        error instanceof Error ? error.message : 'Erro ao iniciar jogo',
-        { id: toastId }
-      );
-    }
+    if (!playerId) return;
+    const ok = await post(
+      `/api/rooms/${roomId}/start`,
+      { playerId },
+      'Não foi possível iniciar. Precisa de 2 ou 4 jogadores, todos prontos.'
+    );
+    if (ok) toast.success('Jogo iniciado!');
   };
 
   const playCard = async (cardIndex: number) => {
     if (!playerId || !gameState) return;
 
-    const currentPlayerInGame = gameState.players[gameState.currentPlayerIndex];
-    if (currentPlayerInGame.id !== playerId) {
+    if (gameState.players[gameState.currentPlayerIndex].id !== playerId) {
       toast.error('Não é sua vez!');
       return;
     }
-
-    try {
-      soundEffects.playCardPlayed();
-      await fetch(`/api/game/${roomId}/play`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ playerId, cardIndex }),
-      });
-      refetch();
-    } catch (error) {
-      toast.error('Erro ao jogar carta');
-      console.error('Erro ao jogar carta:', error);
+    if (gameState.waitingForResponse) {
+      toast.error('Aguarde a resposta do truco');
+      return;
     }
+
+    soundEffects.playCardPlayed();
+    await post(`/api/game/${roomId}/play`, { playerId, cardIndex }, 'Erro ao jogar carta');
   };
 
   const callTruco = async () => {
     if (!playerId) return;
-
-    try {
-      const response = await fetch(`/api/game/${roomId}/truco`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ playerId }),
-      });
-
-      if (!response.ok) {
-        throw new Error('Não foi possível pedir truco');
-      }
-
+    const ok = await post(
+      `/api/game/${roomId}/truco`,
+      { playerId },
+      'Não foi possível pedir truco agora'
+    );
+    if (ok) {
       soundEffects.playTrucoCalled();
       toast.success('Truco pedido! 🔥');
-      refetch();
-    } catch (error) {
-      toast.error(
-        error instanceof Error ? error.message : 'Não foi possível pedir truco'
-      );
     }
   };
 
-  const respondTruco = async (accept: boolean) => {
+  const respondTruco = async (accept: boolean, raise = false) => {
     if (!playerId) return;
-
-    try {
-      await fetch(`/api/game/${roomId}/truco/respond`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ playerId, accept }),
-      });
-      refetch();
-    } catch (error) {
-      console.error('Erro ao responder truco:', error);
-    }
+    await post(
+      `/api/game/${roomId}/truco/respond`,
+      { playerId, accept, raise },
+      'Erro ao responder truco'
+    );
   };
 
   const leaveRoom = async () => {
     if (!playerId) return;
-
+    if (gameState?.gameStarted && !gameState.winner) {
+      if (!window.confirm('Sair agora encerra a partida para todos. Sair mesmo?')) return;
+    }
     try {
       await fetch(`/api/rooms/${roomId}/leave`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ playerId }),
       });
-      router.push('/');
     } catch (error) {
       console.error('Erro ao sair da sala:', error);
     }
+    router.push('/');
+  };
+
+  const backToLobby = async () => {
+    if (!playerId) return;
+    await post(`/api/rooms/${roomId}/reset`, { playerId }, 'Erro ao voltar ao lobby');
   };
 
   if (!room) {
@@ -166,7 +193,8 @@ export default function RoomPage({ params }: { params: Promise<{ roomId: string 
     const team1 = room.players.filter((p) => p.team === 1);
     const team2 = room.players.filter((p) => p.team === 2);
     const allReady = room.players.every((p) => p.isReady);
-    const canStart = room.players.length >= 2 && allReady;
+    const validSize = room.players.length === 2 || room.players.length === 4;
+    const canStart = validSize && allReady;
 
     return (
       <div className="min-h-screen bg-gradient-to-br from-green-800 to-green-900 p-4">
@@ -250,10 +278,17 @@ export default function RoomPage({ params }: { params: Promise<{ roomId: string 
               </button>
             </div>
 
-            {!allReady && (
+            {!validSize ? (
               <p className="text-center text-gray-600 text-sm mt-4">
-                Aguardando todos os jogadores ficarem prontos...
+                O truco é jogado em 2 (1x1) ou 4 jogadores (2x2).
+                {room.players.length === 3 && ' Falta mais um jogador.'}
               </p>
+            ) : (
+              !allReady && (
+                <p className="text-center text-gray-600 text-sm mt-4">
+                  Aguardando todos os jogadores ficarem prontos...
+                </p>
+              )
             )}
           </div>
         </div>
@@ -264,7 +299,8 @@ export default function RoomPage({ params }: { params: Promise<{ roomId: string 
   // Jogo em andamento
   const manilhaRank = gameState.vira ? getManilha(gameState.vira) : null;
   const currentPlayerInGame = gameState.players[gameState.currentPlayerIndex];
-  const isMyTurn = currentPlayerInGame.id === playerId;
+  const isMyTurn =
+    currentPlayerInGame.id === playerId && !gameState.waitingForResponse && !gameState.winner;
 
   const team1Score = gameState.score.team1;
   const team2Score = gameState.score.team2;
@@ -285,47 +321,21 @@ export default function RoomPage({ params }: { params: Promise<{ roomId: string 
     'doze': 'DOZE (12 pontos)',
   };
 
-  // Sistema de eventos para feedback visual
-  const { currentEvent, dismissCurrentEvent } = useGameEvents(gameState.gameEvents || []);
-
-  // Handle game end event - redirect to lobby
+  // Ao fechar a celebração do fim de jogo, volta ao lobby para a revanche
   const handleDismissEvent = () => {
-    if (currentEvent?.type === 'game_won') {
-      dismissCurrentEvent();
-      // Pequeno delay para transição suave
-      setTimeout(() => {
-        window.location.reload();
-      }, 500);
-    } else {
-      dismissCurrentEvent();
-    }
+    const wasGameWon = currentEvent?.type === 'game_won';
+    dismissCurrentEvent();
+    if (wasGameWon) backToLobby();
   };
 
-  // Play sound effects when events happen
-  useEffect(() => {
-    if (!currentEvent) return;
-
-    const isMyTeamWinner = currentEvent.team === myTeam;
-
-    switch (currentEvent.type) {
-      case 'round_won':
-        soundEffects.playRoundWon();
-        break;
-      case 'hand_won':
-        soundEffects.playHandWon();
-        break;
-      case 'game_won':
-        if (isMyTeamWinner) {
-          soundEffects.playGameWon();
-        } else {
-          soundEffects.playGameLost();
-        }
-        break;
-      case 'truco_refused':
-        soundEffects.playTrucoRefused();
-        break;
-    }
-  }, [currentEvent, myTeam]);
+  const canCall = playerId ? canCallTruco(gameState, playerId) : false;
+  const nextTrucoState = getNextTrucoState(gameState.trucoState);
+  const nextTrucoLabel =
+    nextTrucoState === 'truco' ? 'TRUCO' : nextTrucoState ? nextTrucoState.toUpperCase() : '';
+  const iAmOn11 =
+    (myTeam === 1 && gameState.isMaoDe11?.team1) || (myTeam === 2 && gameState.isMaoDe11?.team2);
+  const canRaiseBack = !iAmOn11 && !gameState.isMaoDeFerro &&
+    getNextTrucoState(nextTrucoState ?? 'doze') !== null;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-green-800 to-green-900 p-4">
@@ -466,7 +476,7 @@ export default function RoomPage({ params }: { params: Promise<{ roomId: string 
           <div className="bg-white rounded-lg shadow-lg p-6">
             <h3 className="text-center font-semibold text-gray-800 mb-4">Suas Cartas</h3>
             <div className="flex gap-4 justify-center flex-wrap">
-              {currentPlayer.hand.map((card, idx) => (
+              {myHand.map((card, idx) => (
                 <ModernCard
                   key={idx}
                   card={card}
@@ -480,11 +490,12 @@ export default function RoomPage({ params }: { params: Promise<{ roomId: string 
 
             {/* Botões de ação */}
             <div className="mt-6 space-y-2">
-              {!gameState.waitingForResponse && (
+              {!gameState.waitingForResponse && !gameState.winner && (
                 <TrucoButton
                   variant="call"
+                  label={nextTrucoLabel ? `🔥 ${nextTrucoLabel}!` : undefined}
                   onClick={callTruco}
-                  disabled={gameState.trucoState === 'doze'}
+                  disabled={!canCall || busy}
                 />
               )}
 
@@ -503,6 +514,7 @@ export default function RoomPage({ params }: { params: Promise<{ roomId: string 
                   <div className="grid grid-cols-2 gap-3 relative z-20">
                     <TrucoButton
                       variant="accept"
+                      disabled={busy}
                       onClick={() => {
                         soundEffects.playTrucoAccepted();
                         respondTruco(true);
@@ -510,9 +522,20 @@ export default function RoomPage({ params }: { params: Promise<{ roomId: string 
                     />
                     <TrucoButton
                       variant="refuse"
+                      disabled={busy}
                       onClick={() => respondTruco(false)}
                     />
                   </div>
+                  {canRaiseBack && nextTrucoState && getNextTrucoState(nextTrucoState) && (
+                    <div className="mt-3 relative z-20">
+                      <TrucoButton
+                        variant="call"
+                        label={`⬆️ ACEITAR E PEDIR ${getNextTrucoState(nextTrucoState)!.toUpperCase()}!`}
+                        disabled={busy}
+                        onClick={() => respondTruco(true, true)}
+                      />
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -523,6 +546,16 @@ export default function RoomPage({ params }: { params: Promise<{ roomId: string 
                     ⏳ Aguardando time adversário responder ao pedido de truco...
                   </p>
                 </div>
+              )}
+
+              {gameState.winner && !currentEvent && (
+                <button
+                  onClick={backToLobby}
+                  disabled={busy}
+                  className="w-full bg-green-600 hover:bg-green-700 text-white py-3 rounded-lg font-semibold transition-colors"
+                >
+                  🔁 Jogar de novo (voltar ao lobby)
+                </button>
               )}
 
               <button

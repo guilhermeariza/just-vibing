@@ -13,13 +13,16 @@ export interface Player {
   hand: Card[];
   team: 1 | 2;
   isReady: boolean;
+  /** Quantidade de cartas na mão (útil quando a mão está oculta) */
+  handCount?: number;
 }
 
-export type GameEventType = 'round_won' | 'hand_won' | 'game_won' | 'truco_refused';
+export type GameEventType = 'round_won' | 'round_tied' | 'hand_won' | 'game_won' | 'truco_refused';
 
 export interface GameEvent {
+  id: string;
   type: GameEventType;
-  team: 1 | 2;
+  team: 0 | 1 | 2;
   winningCard?: Card;
   winningPlayerName?: string;
   points?: number;
@@ -39,6 +42,9 @@ export interface GameState {
   trucoCalledBy?: 1 | 2; // Qual time pediu o truco
   currentPlayerIndex: number;
   roundsWon: { team1: number; team2: number };
+  roundResults?: (0 | 1 | 2)[]; // 0 = empate
+  lastRaiseTeam?: 1 | 2; // Time que fez o último aumento
+  winner?: 1 | 2; // Preenchido quando o jogo acaba
   lastRoundWinner?: number; // Índice do jogador que ganhou a última rodada
   gameStarted: boolean;
   dealer: number;
@@ -50,6 +56,14 @@ export interface GameState {
   lastWinningCard?: Card;
   lastWinningPlayerId?: string;
   isProcessingEvent?: boolean;
+}
+
+export interface RoomSummary {
+  id: string;
+  name: string;
+  playerCount: number;
+  maxPlayers: number;
+  inGame: boolean;
 }
 
 export interface Room {

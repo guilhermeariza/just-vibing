@@ -20,6 +20,7 @@ describe('GameEventModal', () => {
 
   it('should render round won event', () => {
     const event: GameEvent = {
+      id: 'evt-test',
       type: 'round_won',
       team: 1,
       winningCard: mockCard,
@@ -34,6 +35,7 @@ describe('GameEventModal', () => {
 
   it('should render hand won event with points', () => {
     const event: GameEvent = {
+      id: 'evt-test',
       type: 'hand_won',
       team: 2,
       points: 3,
@@ -47,6 +49,7 @@ describe('GameEventModal', () => {
 
   it('should render game won event', () => {
     const event: GameEvent = {
+      id: 'evt-test',
       type: 'game_won',
       team: 1,
       points: 12,
@@ -60,6 +63,7 @@ describe('GameEventModal', () => {
 
   it('should render truco refused event', () => {
     const event: GameEvent = {
+      id: 'evt-test',
       type: 'truco_refused',
       team: 1,
       points: 1,
@@ -73,6 +77,7 @@ describe('GameEventModal', () => {
   it('should call onDismiss when clicking backdrop', () => {
     const handleDismiss = vi.fn();
     const event: GameEvent = {
+      id: 'evt-test',
       type: 'round_won',
       team: 1,
       winningPlayerName: 'João',
@@ -90,6 +95,7 @@ describe('GameEventModal', () => {
 
   it('should show different message for losing team', () => {
     const event: GameEvent = {
+      id: 'evt-test',
       type: 'round_won',
       team: 2,
       winningPlayerName: 'Maria',

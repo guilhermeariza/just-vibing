@@ -7,29 +7,19 @@ export async function POST(
 ) {
   try {
     const { roomId } = await params;
-    const { playerId } = await request.json();
+    const body = await request.json();
+    const { playerId } = body;
 
-    if (!playerId) {
-      return NextResponse.json(
-        { error: 'ID do jogador é obrigatório' },
-        { status: 400 }
-      );
+    if (typeof playerId !== 'string' || !playerId) {
+      return NextResponse.json({ error: 'ID do jogador é obrigatório' }, { status: 400 });
     }
 
-    const gameState = gameManager.callTruco(roomId, playerId);
-
-    if (!gameState) {
-      return NextResponse.json(
-        { error: 'Não foi possível pedir truco' },
-        { status: 400 }
-      );
+    if (!gameManager.callTruco(roomId, playerId)) {
+      return NextResponse.json({ error: 'Não foi possível pedir truco agora' }, { status: 400 });
     }
 
-    return NextResponse.json(gameState);
-  } catch (error) {
-    return NextResponse.json(
-      { error: 'Erro ao pedir truco' },
-      { status: 500 }
-    );
+    return NextResponse.json({ success: true });
+  } catch {
+    return NextResponse.json({ error: 'Erro interno' }, { status: 500 });
   }
 }
